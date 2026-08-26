@@ -1,0 +1,53 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add SNMP device",
+        "description": "Connect a device by its IP address. You can add sensors for it afterwards.",
+        "data": {
+          "host": "IP address / hostname",
+          "port": "Port",
+          "version": "SNMP version"
+        }
+      },
+      "auth": {
+        "title": "SNMPv3 credentials",
+        "data": {
+          "username": "Username",
+          "auth_protocol": "Authentication protocol",
+          "auth_key": "Authentication key",
+          "priv_protocol": "Privacy protocol",
+          "priv_key": "Privacy key"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage sensors",
+        "menu_options": {
+          "add_sensor": "Add a sensor",
+          "remove_sensor": "Remove a sensor"
+        }
+      },
+      "add_sensor": {
+        "title": "Add sensor",
+        "data": {
+          "name": "Name",
+          "community": "Community",
+          "baseoid": "Base OID"
+        }
+      },
+      "remove_sensor": {
+        "title": "Remove sensors",
+        "data": {
+          "sensors": "Sensors to remove"
+        }
+      }
+    }
+  }
+}

@@ -1,5 +1,11 @@
 """SNMP constants."""
 
+DOMAIN = "snmp"
+
+# Keys used inside a config entry's `options[CONF_SENSORS]` list.
+CONF_SENSORS = "sensors"
+CONF_SENSOR_ID = "id"
+
 CONF_ACCEPT_ERRORS = "accept_errors"
 CONF_AUTH_KEY = "auth_key"
 CONF_AUTH_PROTOCOL = "auth_protocol"

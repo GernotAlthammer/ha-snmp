@@ -1,8 +1,10 @@
 {
   "domain": "snmp",
   "name": "SNMP",
-  "codeowners": ["@nmaggioni"],
-  "documentation": "https://www.home-assistant.io/integrations/snmp",
+  "codeowners": ["@GernotAlthammer"],
+  "config_flow": true,
+  "documentation": "https://github.com/GernotAlthammer/ha-snmp",
+  "issue_tracker": "https://github.com/GernotAlthammer/ha-snmp/issues",
   "iot_class": "local_polling",
   "loggers": ["pyasn1", "pysmi", "pysnmp"],
   "quality_scale": "legacy",

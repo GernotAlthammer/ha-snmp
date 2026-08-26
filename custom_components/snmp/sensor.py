@@ -35,8 +35,10 @@ from homeassistant.const import (
     CONF_VALUE_TEMPLATE,
     STATE_UNKNOWN,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.template import Template
 from homeassistant.helpers.trigger_template_entity import (
@@ -57,6 +59,8 @@ from .const import (
     CONF_DEFAULT_VALUE,
     CONF_PRIV_KEY,
     CONF_PRIV_PROTOCOL,
+    CONF_SENSOR_ID,
+    CONF_SENSORS,
     CONF_VERSION,
     DEFAULT_AUTH_PROTOCOL,
     DEFAULT_COMMUNITY,
@@ -66,11 +70,12 @@ from .const import (
     DEFAULT_PRIV_PROTOCOL,
     DEFAULT_TIMEOUT,
     DEFAULT_VERSION,
+    DOMAIN,
     MAP_AUTH_PROTOCOLS,
     MAP_PRIV_PROTOCOLS,
     SNMP_VERSIONS,
 )
-from .util import async_create_request_cmd_args
+from .util import async_build_entry_request_args, async_create_request_cmd_args
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -172,6 +177,44 @@ async def async_setup_platform(
     async_add_entities([SnmpSensor(hass, data, trigger_entity_config, value_template)])
 
 
+async def async_setup_entry(
+    hass: HomeAssistant,
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
+    """Set up SNMP sensors from a config entry (UI-configured device)."""
+    device_info = DeviceInfo(
+        identifiers={(DOMAIN, entry.entry_id)},
+        name=entry.title,
+        configuration_url=f"http://{entry.data[CONF_HOST]}",
+    )
+
+    entities: list[SnmpSensor] = []
+    for sensor_conf in entry.options.get(CONF_SENSORS, []):
+        baseoid = sensor_conf[CONF_BASEOID]
+        request_args = await async_build_entry_request_args(
+            hass, entry.data, baseoid, sensor_conf.get(CONF_COMMUNITY)
+        )
+        data = SnmpData(request_args, baseoid, accept_errors=True, default_value=None)
+
+        unique_id = f"{entry.entry_id}_{sensor_conf[CONF_SENSOR_ID]}"
+        trigger_entity_config = {
+            CONF_NAME: Template(sensor_conf[CONF_NAME], hass),
+            CONF_UNIQUE_ID: unique_id,
+        }
+        entities.append(
+            SnmpSensor(
+                hass,
+                data,
+                trigger_entity_config,
+                value_template=None,
+                device_info=device_info,
+            )
+        )
+
+    async_add_entities(entities)
+
+
 class SnmpSensor(ManualTriggerSensorEntity):
     """Representation of a SNMP sensor."""
 
@@ -183,12 +226,15 @@ class SnmpSensor(ManualTriggerSensorEntity):
         data: SnmpData,
         config: ConfigType,
         value_template: ValueTemplate | None,
+        device_info: DeviceInfo | None = None,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(hass, config)
         self.data = data
         self._state = None
         self._value_template = value_template
+        if device_info is not None:
+            self._attr_device_info = device_info
 
     @override
     async def async_added_to_hass(self) -> None:
