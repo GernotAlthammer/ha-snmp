@@ -1,0 +1,53 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SNMP-Gerät hinzufügen",
+        "description": "Gerät über die IP-Adresse einbinden. Sensoren können anschließend hinzugefügt werden.",
+        "data": {
+          "host": "IP-Adresse / Hostname",
+          "port": "Port",
+          "version": "SNMP-Version"
+        }
+      },
+      "auth": {
+        "title": "SNMPv3-Zugangsdaten",
+        "data": {
+          "username": "Benutzername",
+          "auth_protocol": "Authentifizierungsprotokoll",
+          "auth_key": "Authentifizierungsschlüssel",
+          "priv_protocol": "Verschlüsselungsprotokoll",
+          "priv_key": "Verschlüsselungsschlüssel"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sensoren verwalten",
+        "menu_options": {
+          "add_sensor": "Sensor hinzufügen",
+          "remove_sensor": "Sensor entfernen"
+        }
+      },
+      "add_sensor": {
+        "title": "Sensor hinzufügen",
+        "data": {
+          "name": "Name",
+          "community": "Community",
+          "baseoid": "Base OID"
+        }
+      },
+      "remove_sensor": {
+        "title": "Sensoren entfernen",
+        "data": {
+          "sensors": "Zu entfernende Sensoren"
+        }
+      }
+    }
+  }
+}
