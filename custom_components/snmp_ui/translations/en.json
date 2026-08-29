@@ -1,0 +1,91 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add SNMP device",
+        "menu_options": {
+          "manual": "Enter a device manually",
+          "discover": "Scan the network for printers"
+        }
+      },
+      "manual": {
+        "title": "Add SNMP device",
+        "description": "Connect a device by its IP address. You can add sensors for it afterwards.",
+        "data": {
+          "host": "IP address / hostname",
+          "port": "Port",
+          "version": "SNMP version"
+        }
+      },
+      "auth": {
+        "title": "SNMPv3 credentials",
+        "data": {
+          "username": "Username",
+          "auth_protocol": "Authentication protocol",
+          "auth_key": "Authentication key",
+          "priv_protocol": "Privacy protocol",
+          "priv_key": "Privacy key"
+        }
+      },
+      "discover": {
+        "title": "Scan the network for printers",
+        "description": "Scans a subnet for devices that answer as an SNMP printer, using SNMP v1/v2c. SNMPv3 devices must be added manually.",
+        "data": {
+          "subnet": "Subnet (e.g. 192.168.1.0/24)",
+          "version": "SNMP version",
+          "community": "Community",
+          "port": "Port"
+        }
+      },
+      "discover_select": {
+        "title": "Printers found",
+        "description": "{count} printer(s) found. Pick which ones to add - all sensors (model, status, page count, toner/ink levels) are created automatically.",
+        "data": {
+          "host": "Printers to add"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "SNMP printer discovered",
+        "description": "Found {model} at {host}. Add it? All sensors (model, status, page count, toner/ink levels) will be created automatically."
+      }
+    },
+    "abort": {
+      "already_configured": "This device is already configured.",
+      "already_in_progress": "Discovery for this device is already in progress.",
+      "not_printer": "This device doesn't respond to SNMP and can't be set up automatically.",
+      "invalid_subnet": "That doesn't look like a valid subnet (e.g. 192.168.1.0/24).",
+      "subnet_too_large": "That subnet is too large to scan.",
+      "no_printers_found": "No SNMP printers were found on that subnet."
+    },
+    "error": {
+      "invalid_subnet": "That doesn't look like a valid subnet (e.g. 192.168.1.0/24).",
+      "subnet_too_large": "That subnet is too large to scan.",
+      "no_printers_found": "No SNMP printers were found on that subnet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Manage sensors",
+        "menu_options": {
+          "add_sensor": "Add a sensor",
+          "remove_sensor": "Remove a sensor"
+        }
+      },
+      "add_sensor": {
+        "title": "Add sensor",
+        "data": {
+          "name": "Name",
+          "community": "Community",
+          "baseoid": "Base OID"
+        }
+      },
+      "remove_sensor": {
+        "title": "Remove sensors",
+        "data": {
+          "sensors": "Sensors to remove"
+        }
+      }
+    }
+  }
+}
