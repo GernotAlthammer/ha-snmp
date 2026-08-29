@@ -1,5 +1,9 @@
 # HA-SNMP - SNMP Integration for Home Assistant with UI Setup
 
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-integration-41BDF5?logo=home-assistant)](https://www.home-assistant.io/)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Home Assistant SNMP integration with UI setup, distributed as a [HACS](https://hacs.xyz/) custom integration.
 
 It started as a copy of Home Assistant's built-in `snmp` platform with a config flow added, so devices and sensors can be set up from **Settings → Devices & Services** instead of `configuration.yaml`.
