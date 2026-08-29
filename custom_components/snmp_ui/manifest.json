@@ -1,0 +1,18 @@
+{
+  "domain": "snmp_ui",
+  "name": "SNMP (UI Setup)",
+  "codeowners": ["@GernotAlthammer"],
+  "config_flow": true,
+  "documentation": "https://github.com/GernotAlthammer/ha-snmp",
+  "issue_tracker": "https://github.com/GernotAlthammer/ha-snmp/issues",
+  "iot_class": "local_polling",
+  "loggers": ["pyasn1", "pysmi", "pysnmp"],
+  "quality_scale": "legacy",
+  "requirements": ["pysnmp==7.1.27"],
+  "zeroconf": [
+    "_printer._tcp.local.",
+    "_pdl-datastream._tcp.local.",
+    "_ipp._tcp.local.",
+    "_ipps._tcp.local."
+  ]
+}
