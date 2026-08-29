@@ -9,16 +9,27 @@ Two-tier setup, matching how SNMP is actually used on a network:
   that device. Sensors are added/removed via the "Configure" flow and each
   one is parametrized with exactly the three fields requested: Name,
   Community and Base OID.
+
+On top of the manual path, devices can also be found automatically: a
+network scan (`async_step_discover`) probes a subnet for printers that
+answer SNMP's Host Resources "printer status" OID, and - once the user picks
+which of the found printers to add - builds a full sensor set for each of
+them automatically (model, serial number, status, page count and one "Level"
+sensor per toner/ink marker discovered via an SNMP table walk), without the
+user having to type in any OIDs.
 """
 
 from __future__ import annotations
 
+import asyncio
+import ipaddress
+import logging
 from typing import Any
 from uuid import uuid4
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry, ConfigFlow, OptionsFlow
+from homeassistant.config_entries import SOURCE_IMPORT, ConfigEntry, ConfigFlow, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_NAME, CONF_PORT, CONF_USERNAME
 from homeassistant.core import callback
 from homeassistant.helpers import config_validation as cv
@@ -40,15 +51,31 @@ from .const import (
     CONF_PRIV_PROTOCOL,
     CONF_SENSOR_ID,
     CONF_SENSORS,
+    CONF_SUBNET,
     CONF_VERSION,
     DEFAULT_COMMUNITY,
     DEFAULT_PORT,
     DOMAIN,
     MAP_AUTH_PROTOCOLS,
     MAP_PRIV_PROTOCOLS,
+    OID_DEVICE_MODEL,
+    OID_MARKER_SUPPLIES_DESCRIPTION,
+    OID_MARKER_SUPPLIES_LEVEL,
+    OID_MARKER_SUPPLIES_MAX,
+    OID_PRINTER_NAME,
+    OID_PRINTER_STATUS,
+    OID_SERIAL_NUMBER,
+    OID_TOTAL_PAGES,
+    SCAN_CONCURRENCY,
+    SCAN_MAX_HOSTS,
+    SCAN_TIMEOUT,
 )
+from .util import async_snmp_probe, async_snmp_walk_table
+
+_LOGGER = logging.getLogger(__name__)
 
 VERSION_OPTIONS = ["1", "2c", "3"]
+DISCOVERY_VERSION_OPTIONS = ["1", "2c"]  # SNMPv3 needs per-device credentials, not scannable
 AUTH_PROTOCOL_OPTIONS = list(MAP_AUTH_PROTOCOLS)
 PRIV_PROTOCOL_OPTIONS = list(MAP_PRIV_PROTOCOLS)
 
@@ -105,6 +132,93 @@ def _sensor_schema() -> vol.Schema:
     )
 
 
+def _discover_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    defaults = defaults or {}
+    return vol.Schema(
+        {
+            vol.Required(
+                CONF_SUBNET, default=defaults.get(CONF_SUBNET, "")
+            ): TextSelector(),
+            vol.Optional(
+                CONF_VERSION, default=defaults.get(CONF_VERSION, "2c")
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=DISCOVERY_VERSION_OPTIONS, mode=SelectSelectorMode.DROPDOWN
+                )
+            ),
+            vol.Optional(
+                CONF_COMMUNITY, default=defaults.get(CONF_COMMUNITY, DEFAULT_COMMUNITY)
+            ): TextSelector(),
+            vol.Optional(
+                CONF_PORT, default=defaults.get(CONF_PORT, int(DEFAULT_PORT))
+            ): cv.port,
+        }
+    )
+
+
+async def _build_printer_sensors(
+    hass: Any, host: str, port: int, version: str, community: str
+) -> tuple[str, list[dict[str, Any]]]:
+    """Probe one printer and build its full sensor set automatically.
+
+    Returns a display name for the device plus a ready-to-store list of
+    sensor dicts (same shape as sensors added manually via the options
+    flow), covering model/serial/status/page-count and one "Level" sensor
+    per toner/ink marker found via an SNMP table walk. Any field the printer
+    doesn't support is silently skipped.
+    """
+
+    async def probe(oid: str) -> str | None:
+        return await async_snmp_probe(hass, host, port, version, community, oid)
+
+    model, serial, printer_name, status, pages = await asyncio.gather(
+        probe(OID_DEVICE_MODEL),
+        probe(OID_SERIAL_NUMBER),
+        probe(OID_PRINTER_NAME),
+        probe(OID_PRINTER_STATUS),
+        probe(OID_TOTAL_PAGES),
+    )
+
+    display_name = (printer_name or model or host or "").strip() or host
+
+    sensors: list[dict[str, Any]] = []
+
+    def add_sensor(label: str, value: str | None, oid: str) -> None:
+        if value is None:
+            return
+        sensors.append(
+            {
+                CONF_SENSOR_ID: uuid4().hex[:8],
+                CONF_NAME: f"{display_name} {label}",
+                CONF_COMMUNITY: community,
+                CONF_BASEOID: oid,
+            }
+        )
+
+    add_sensor("Model", model, OID_DEVICE_MODEL)
+    add_sensor("Serial Number", serial, OID_SERIAL_NUMBER)
+    add_sensor("Status", status, OID_PRINTER_STATUS)
+    add_sensor("Total Pages", pages, OID_TOTAL_PAGES)
+
+    marker_rows = await async_snmp_walk_table(
+        hass, host, port, version, community, OID_MARKER_SUPPLIES_DESCRIPTION
+    )
+
+    async def build_marker(suffix: str, description: str) -> None:
+        clean_description = (description or "").strip(" \x00") or f"Marker {suffix}"
+        level_oid = f"{OID_MARKER_SUPPLIES_LEVEL}.{suffix}"
+        max_oid = f"{OID_MARKER_SUPPLIES_MAX}.{suffix}"
+        level, max_capacity = await asyncio.gather(probe(level_oid), probe(max_oid))
+        add_sensor(f"{clean_description} Level", level, level_oid)
+        add_sensor(f"{clean_description} Max", max_capacity, max_oid)
+
+    await asyncio.gather(
+        *(build_marker(suffix, description) for suffix, description in marker_rows)
+    )
+
+    return display_name, sensors
+
+
 class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle adding a new SNMP device."""
 
@@ -113,11 +227,21 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         """Initialize the flow."""
         self._device_data: dict[str, Any] = {}
+        self._scan_params: dict[str, Any] = {}
+        self._scan_results: list[dict[str, Any]] = []
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> Any:
-        """First step: identify the device by IP address and SNMP version."""
+        """Let the user pick between manual entry and a network scan."""
+        return self.async_show_menu(
+            step_id="user", menu_options=["manual", "discover"]
+        )
+
+    async def async_step_manual(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Identify a single device by IP address and SNMP version."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -138,7 +262,7 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         return self.async_show_form(
-            step_id="user", data_schema=_device_schema(), errors=errors
+            step_id="manual", data_schema=_device_schema(), errors=errors
         )
 
     async def async_step_auth(
@@ -157,6 +281,162 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
             )
 
         return self.async_show_form(step_id="auth", data_schema=_auth_schema())
+
+    async def async_step_discover(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Scan a subnet for printers (SNMP v1/v2c only)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            subnet = user_input[CONF_SUBNET]
+            version = user_input.get(CONF_VERSION, "2c")
+            community = user_input.get(CONF_COMMUNITY, DEFAULT_COMMUNITY)
+            port = user_input.get(CONF_PORT, int(DEFAULT_PORT))
+
+            try:
+                network = ipaddress.ip_network(subnet, strict=False)
+            except ValueError:
+                errors["base"] = "invalid_subnet"
+            else:
+                hosts = list(network.hosts()) or [network.network_address]
+                if len(hosts) > SCAN_MAX_HOSTS:
+                    errors["base"] = "subnet_too_large"
+                else:
+                    results = await self._async_scan_hosts(
+                        hosts, version, community, port
+                    )
+                    if not results:
+                        errors["base"] = "no_printers_found"
+                    else:
+                        self._scan_results = results
+                        self._scan_params = {
+                            CONF_VERSION: version,
+                            CONF_COMMUNITY: community,
+                            CONF_PORT: port,
+                        }
+                        return await self.async_step_discover_select()
+
+        return self.async_show_form(
+            step_id="discover",
+            data_schema=_discover_schema(user_input),
+            errors=errors,
+        )
+
+    async def _async_scan_hosts(
+        self,
+        hosts: list[Any],
+        version: str,
+        community: str,
+        port: int,
+    ) -> list[dict[str, Any]]:
+        """Probe every host in `hosts` concurrently for a printer."""
+        semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
+        existing = {
+            entry.data.get(CONF_HOST) for entry in self._async_current_entries()
+        }
+
+        async def probe(ip_addr: Any) -> dict[str, Any] | None:
+            host = str(ip_addr)
+            if host in existing:
+                return None
+            async with semaphore:
+                status = await async_snmp_probe(
+                    self.hass, host, port, version, community, OID_PRINTER_STATUS,
+                    timeout=SCAN_TIMEOUT,
+                )
+                if status is None:
+                    return None
+                model = await async_snmp_probe(
+                    self.hass, host, port, version, community, OID_DEVICE_MODEL,
+                    timeout=SCAN_TIMEOUT,
+                )
+            return {CONF_HOST: host, "model": model or host}
+
+        results = await asyncio.gather(*(probe(ip) for ip in hosts))
+        return [result for result in results if result]
+
+    async def async_step_discover_select(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Let the user pick which discovered printers to add."""
+        if user_input is not None:
+            selected_hosts = set(user_input[CONF_HOST])
+            selected = [
+                r for r in self._scan_results if r[CONF_HOST] in selected_hosts
+            ]
+
+            version = self._scan_params[CONF_VERSION]
+            community = self._scan_params[CONF_COMMUNITY]
+            port = self._scan_params[CONF_PORT]
+
+            built = await asyncio.gather(
+                *(
+                    _build_printer_sensors(
+                        self.hass, result[CONF_HOST], port, version, community
+                    )
+                    for result in selected
+                )
+            )
+
+            prepared = [
+                {
+                    "data": {
+                        CONF_HOST: result[CONF_HOST],
+                        CONF_PORT: port,
+                        CONF_VERSION: version,
+                    },
+                    "title": display_name,
+                    "options": {CONF_SENSORS: sensors},
+                }
+                for result, (display_name, sensors) in zip(selected, built)
+            ]
+
+            # This flow can only finish with a single config entry. Kick off
+            # an independent background flow for every additional printer
+            # and finish this one with the first.
+            for extra in prepared[1:]:
+                self.hass.async_create_task(
+                    self.hass.config_entries.flow.async_init(
+                        DOMAIN, context={"source": SOURCE_IMPORT}, data=extra
+                    )
+                )
+
+            return await self.async_step_import(prepared[0])
+
+        options = [
+            {"value": result[CONF_HOST], "label": f"{result['model']} ({result[CONF_HOST]})"}
+            for result in self._scan_results
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HOST, default=[o["value"] for o in options]): SelectSelector(
+                    SelectSelectorConfig(
+                        options=options, multiple=True, mode=SelectSelectorMode.LIST
+                    )
+                )
+            }
+        )
+        return self.async_show_form(
+            step_id="discover_select",
+            data_schema=schema,
+            description_placeholders={"count": str(len(self._scan_results))},
+        )
+
+    async def async_step_import(self, import_data: dict[str, Any]) -> Any:
+        """Create one config entry from fully pre-built discovery data.
+
+        Not shown to the user - used internally so that selecting several
+        discovered printers at once can create several config entries.
+        """
+        data = import_data["data"]
+        await self.async_set_unique_id(f"{data[CONF_HOST]}:{data[CONF_PORT]}")
+        self._abort_if_unique_id_configured()
+        return self.async_create_entry(
+            title=import_data["title"],
+            data=data,
+            options=import_data["options"],
+        )
 
     @staticmethod
     @callback

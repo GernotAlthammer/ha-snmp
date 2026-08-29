@@ -13,8 +13,11 @@ from pysnmp.hlapi.v3arch.asyncio import (
     Udp6TransportTarget,
     UdpTransportTarget,
     UsmUserData,
+    bulk_walk_cmd,
+    get_cmd,
 )
 from pysnmp.hlapi.v3arch.asyncio.cmdgen import LCD
+from pysnmp.proto.rfc1905 import NoSuchInstance, NoSuchObject
 from pysnmp.smi import view
 
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_USERNAME, EVENT_HOMEASSISTANT_STOP
@@ -152,6 +155,106 @@ async def async_build_entry_request_args(
         )
 
     return await async_create_request_cmd_args(hass, auth_data, target, baseoid)
+
+
+async def async_snmp_probe(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    version: str,
+    community: str,
+    oid: str,
+    timeout: float = 2.0,
+) -> str | None:
+    """Best-effort single SNMP v1/v2c GET, for use during network discovery.
+
+    Returns the decoded value, or None if the host doesn't respond, doesn't
+    support this OID, or takes too long. Never raises and never logs errors -
+    a non-answer is the expected outcome for most addresses during a scan.
+    """
+    try:
+        target = await UdpTransportTarget.create((host, port), timeout=timeout, retries=0)
+    except PySnmpError:
+        return None
+
+    auth_data = CommunityData(community, mpModel=SNMP_VERSIONS[version])
+    engine = await async_get_snmp_engine(hass)
+
+    try:
+        errindication, errstatus, errindex, restable = await get_cmd(
+            engine,
+            auth_data,
+            target,
+            ContextData(),
+            ObjectType(ObjectIdentity(oid)),
+        )
+    except Exception:  # noqa: BLE001 - discovery must never crash on a bad host
+        return None
+
+    if errindication or errstatus:
+        return None
+
+    for resrow in restable:
+        value = resrow[-1]
+        if isinstance(value, (NoSuchObject, NoSuchInstance)):
+            return None
+        return str(value)
+    return None
+
+
+async def async_snmp_walk_table(
+    hass: HomeAssistant,
+    host: str,
+    port: int,
+    version: str,
+    community: str,
+    base_oid: str,
+    timeout: float = 2.0,
+    max_rows: int = 16,
+) -> list[tuple[str, str]]:
+    """Best-effort SNMP v1/v2c table walk, for use during network discovery.
+
+    Returns a list of (index_suffix, decoded_value) pairs for every row under
+    `base_oid`. Stops early once the walk leaves the table, `max_rows` is
+    reached, or anything goes wrong - a partial/empty result is fine here,
+    this is only used to auto-populate sensor suggestions.
+    """
+    try:
+        target = await UdpTransportTarget.create((host, port), timeout=timeout, retries=0)
+    except PySnmpError:
+        return []
+
+    auth_data = CommunityData(community, mpModel=SNMP_VERSIONS[version])
+    engine = await async_get_snmp_engine(hass)
+    results: list[tuple[str, str]] = []
+
+    try:
+        walker = bulk_walk_cmd(
+            engine,
+            auth_data,
+            target,
+            ContextData(),
+            0,
+            25,
+            ObjectType(ObjectIdentity(base_oid)),
+            lexicographicMode=False,
+        )
+        async for errindication, errstatus, errindex, restable in walker:
+            if errindication or errstatus:
+                break
+            for oid_obj, value in restable:
+                oid_str = str(oid_obj)
+                if not oid_str.startswith(base_oid + "."):
+                    return results
+                if isinstance(value, (NoSuchObject, NoSuchInstance)):
+                    continue
+                results.append((oid_str[len(base_oid) + 1 :], str(value)))
+                if len(results) >= max_rows:
+                    return results
+    except Exception:  # noqa: BLE001 - discovery must never crash on a bad host
+        return results
+
+    return results
 
 
 def _get_snmp_engine() -> SnmpEngine:
