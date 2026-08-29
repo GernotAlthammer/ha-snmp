@@ -2,16 +2,18 @@
 
 Home Assistant SNMP integration with UI setup, distributed as a [HACS](https://hacs.xyz/) custom integration.
 
-It is based on Home Assistant's built-in `snmp` sensor platform, with a config flow added so devices and sensors can be set up from **Settings → Devices & Services** instead of `configuration.yaml`.
+It started as a copy of Home Assistant's built-in `snmp` platform with a config flow added, so devices and sensors can be set up from **Settings → Devices & Services** instead of `configuration.yaml`.
+
+**Domain: `snmp_ui`** (not `snmp`). Home Assistant loads a `custom_components/<domain>` folder *instead of* a built-in integration with the same domain, not alongside it - so if this integration used the `snmp` domain, it would silently disable Home Assistant's built-in SNMP integration for everyone who installs it, and shadow any future core updates to it. Using `snmp_ui` keeps this integration fully independent: the built-in `snmp` integration (and any YAML config using `platform: snmp`) keeps working completely undisturbed, side by side with this one.
 
 ## Installation (HACS)
 
 1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/GernotAlthammer/ha-snmp` as type *Integration*.
-2. Install "SNMP Integration UI" and restart Home Assistant.
+2. Install "SNMP (UI Setup)" and restart Home Assistant.
 
 ## Adding a device
 
-**Settings → Devices & Services → Add Integration → SNMP** offers three ways in:
+**Settings → Devices & Services → Add Integration → SNMP (UI Setup)** offers three ways in:
 
 ### Automatically via mDNS (zeroconf)
 
@@ -49,4 +51,12 @@ All sensors added for a device are grouped under that device in Home Assistant.
 
 ## YAML configuration
 
-The original YAML-based `snmp:` sensor platform still works unchanged for existing setups; the config flow is purely additive.
+This integration also ships its own copies of the `sensor`, `switch` and `device_tracker` platforms (identical logic to Home Assistant's built-in ones), reachable under `platform: snmp_ui` instead of `platform: snmp`. You only need this if you specifically want your YAML-configured entities managed by this integration rather than the built-in one - for plain YAML use, Home Assistant's built-in `snmp:` platform (`platform: snmp`) is unaffected by installing this integration and works exactly as before.
+
+## Migrating from an earlier version of this integration (domain `snmp`)
+
+Versions of this integration prior to the `snmp_ui` rename used the `snmp` domain, which overrode Home Assistant's built-in SNMP integration. If you're upgrading from one of those versions:
+
+1. Update to this version and restart Home Assistant.
+2. Existing config entries created under the old `snmp` domain are not automatically migrated (Home Assistant ties config entries to a domain). Remove them under Settings → Devices & Services and re-add your devices via **SNMP (UI Setup)**.
+3. If you had `platform: snmp` in YAML specifically to reach this integration's sensor/switch/device_tracker platforms, change it to `platform: snmp_ui`.
