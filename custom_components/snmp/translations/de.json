@@ -3,6 +3,13 @@
     "step": {
       "user": {
         "title": "SNMP-Gerät hinzufügen",
+        "menu_options": {
+          "manual": "Gerät manuell eingeben",
+          "discover": "Netzwerk nach Druckern durchsuchen"
+        }
+      },
+      "manual": {
+        "title": "SNMP-Gerät hinzufügen",
         "description": "Gerät über die IP-Adresse einbinden. Sensoren können anschließend hinzugefügt werden.",
         "data": {
           "host": "IP-Adresse / Hostname",
@@ -19,10 +26,35 @@
           "priv_protocol": "Verschlüsselungsprotokoll",
           "priv_key": "Verschlüsselungsschlüssel"
         }
+      },
+      "discover": {
+        "title": "Netzwerk nach Druckern durchsuchen",
+        "description": "Durchsucht ein Subnetz nach Geräten, die als SNMP-Drucker antworten (SNMP v1/v2c). SNMPv3-Geräte müssen manuell hinzugefügt werden.",
+        "data": {
+          "subnet": "Subnetz (z. B. 192.168.1.0/24)",
+          "version": "SNMP-Version",
+          "community": "Community",
+          "port": "Port"
+        }
+      },
+      "discover_select": {
+        "title": "Gefundene Drucker",
+        "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt.",
+        "data": {
+          "host": "Hinzuzufügende Drucker"
+        }
       }
     },
     "abort": {
-      "already_configured": "Dieses Gerät ist bereits eingerichtet."
+      "already_configured": "Dieses Gerät ist bereits eingerichtet.",
+      "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
+      "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
+      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
+    },
+    "error": {
+      "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
+      "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
+      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
     }
   },
   "options": {
