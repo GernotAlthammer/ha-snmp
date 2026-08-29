@@ -1,0 +1,91 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "SNMP-Gerät hinzufügen",
+        "menu_options": {
+          "manual": "Gerät manuell eingeben",
+          "discover": "Netzwerk nach Druckern durchsuchen"
+        }
+      },
+      "manual": {
+        "title": "SNMP-Gerät hinzufügen",
+        "description": "Gerät über die IP-Adresse einbinden. Sensoren können anschließend hinzugefügt werden.",
+        "data": {
+          "host": "IP-Adresse / Hostname",
+          "port": "Port",
+          "version": "SNMP-Version"
+        }
+      },
+      "auth": {
+        "title": "SNMPv3-Zugangsdaten",
+        "data": {
+          "username": "Benutzername",
+          "auth_protocol": "Authentifizierungsprotokoll",
+          "auth_key": "Authentifizierungsschlüssel",
+          "priv_protocol": "Verschlüsselungsprotokoll",
+          "priv_key": "Verschlüsselungsschlüssel"
+        }
+      },
+      "discover": {
+        "title": "Netzwerk nach Druckern durchsuchen",
+        "description": "Durchsucht ein Subnetz nach Geräten, die als SNMP-Drucker antworten (SNMP v1/v2c). SNMPv3-Geräte müssen manuell hinzugefügt werden.",
+        "data": {
+          "subnet": "Subnetz (z. B. 192.168.1.0/24)",
+          "version": "SNMP-Version",
+          "community": "Community",
+          "port": "Port"
+        }
+      },
+      "discover_select": {
+        "title": "Gefundene Drucker",
+        "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt.",
+        "data": {
+          "host": "Hinzuzufügende Drucker"
+        }
+      },
+      "zeroconf_confirm": {
+        "title": "SNMP-Drucker gefunden",
+        "description": "{model} unter {host} gefunden. Hinzufügen? Alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt."
+      }
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet.",
+      "already_in_progress": "Die Erkennung für dieses Gerät läuft bereits.",
+      "not_printer": "Dieses Gerät antwortet nicht auf SNMP und kann nicht automatisch eingerichtet werden.",
+      "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
+      "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
+      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
+    },
+    "error": {
+      "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
+      "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
+      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Sensoren verwalten",
+        "menu_options": {
+          "add_sensor": "Sensor hinzufügen",
+          "remove_sensor": "Sensor entfernen"
+        }
+      },
+      "add_sensor": {
+        "title": "Sensor hinzufügen",
+        "data": {
+          "name": "Name",
+          "community": "Community",
+          "baseoid": "Base OID"
+        }
+      },
+      "remove_sensor": {
+        "title": "Sensoren entfernen",
+        "data": {
+          "sensors": "Zu entfernende Sensoren"
+        }
+      }
+    }
+  }
+}
