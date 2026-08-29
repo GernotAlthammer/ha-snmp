@@ -43,10 +43,16 @@
         "data": {
           "host": "Printers to add"
         }
+      },
+      "zeroconf_confirm": {
+        "title": "SNMP printer discovered",
+        "description": "Found {model} at {host}. Add it? All sensors (model, status, page count, toner/ink levels) will be created automatically."
       }
     },
     "abort": {
       "already_configured": "This device is already configured.",
+      "already_in_progress": "Discovery for this device is already in progress.",
+      "not_printer": "This device doesn't respond to SNMP and can't be set up automatically.",
       "invalid_subnet": "That doesn't look like a valid subnet (e.g. 192.168.1.0/24).",
       "subnet_too_large": "That subnet is too large to scan.",
       "no_printers_found": "No SNMP printers were found on that subnet."

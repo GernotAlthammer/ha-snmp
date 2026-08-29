@@ -41,6 +41,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
     TextSelectorType,
 )
+from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
 from .const import (
     CONF_AUTH_KEY,
@@ -224,11 +225,16 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    # Class variable: dedupe zeroconf announcements seen across flow instances
+    # (a printer can advertise several service types, each triggering a call).
+    _zeroconf_seen_hosts: set[str] = set()
+
     def __init__(self) -> None:
         """Initialize the flow."""
         self._device_data: dict[str, Any] = {}
         self._scan_params: dict[str, Any] = {}
         self._scan_results: list[dict[str, Any]] = []
+        self._zeroconf_info: dict[str, Any] = {}
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -436,6 +442,91 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
             title=import_data["title"],
             data=data,
             options=import_data["options"],
+        )
+
+    async def async_step_zeroconf(
+        self, discovery_info: ZeroconfServiceInfo
+    ) -> Any:
+        """Handle an incoming zeroconf/mDNS announcement.
+
+        Many network printers advertise themselves via mDNS (e.g. as
+        `_printer._tcp`, `_ipp._tcp`...). This confirms the announcement is
+        actually SNMP-capable before showing a discovery card - a printer
+        can easily support IPP/AirPrint without SNMP.
+        """
+        host = discovery_info.host
+        if not host:
+            return self.async_abort(reason="not_printer")
+
+        if host in SNMPConfigFlow._zeroconf_seen_hosts:
+            return self.async_abort(reason="already_in_progress")
+        SNMPConfigFlow._zeroconf_seen_hosts.add(host)
+
+        port = int(DEFAULT_PORT)
+        model: str | None = None
+        working_version: str | None = None
+
+        for version in ("2c", "1"):
+            status = await async_snmp_probe(
+                self.hass, host, port, version, DEFAULT_COMMUNITY,
+                OID_PRINTER_STATUS, timeout=2.5,
+            )
+            if status is not None:
+                working_version = version
+                model = await async_snmp_probe(
+                    self.hass, host, port, version, DEFAULT_COMMUNITY,
+                    OID_DEVICE_MODEL, timeout=2.5,
+                )
+                break
+
+        if working_version is None:
+            # Responds to mDNS but not to SNMP with the default community -
+            # nothing we can auto-configure, so don't show a discovery card.
+            SNMPConfigFlow._zeroconf_seen_hosts.discard(host)
+            return self.async_abort(reason="not_printer")
+
+        await self.async_set_unique_id(f"{host}:{port}")
+        self._abort_if_unique_id_configured()
+
+        self._zeroconf_info = {
+            CONF_HOST: host,
+            CONF_PORT: port,
+            CONF_VERSION: working_version,
+            CONF_COMMUNITY: DEFAULT_COMMUNITY,
+            "model": model or host,
+        }
+        self.context["title_placeholders"] = {"name": model or host}
+        return await self.async_step_zeroconf_confirm()
+
+    async def async_step_zeroconf_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Confirm adding a printer found via zeroconf, building its sensors."""
+        if user_input is not None:
+            info = self._zeroconf_info
+            display_name, sensors = await _build_printer_sensors(
+                self.hass,
+                info[CONF_HOST],
+                info[CONF_PORT],
+                info[CONF_VERSION],
+                info[CONF_COMMUNITY],
+            )
+            return self.async_create_entry(
+                title=display_name,
+                data={
+                    CONF_HOST: info[CONF_HOST],
+                    CONF_PORT: info[CONF_PORT],
+                    CONF_VERSION: info[CONF_VERSION],
+                },
+                options={CONF_SENSORS: sensors},
+            )
+
+        return self.async_show_form(
+            step_id="zeroconf_confirm",
+            description_placeholders={
+                "model": self._zeroconf_info.get("model", "Unknown"),
+                "host": self._zeroconf_info.get(CONF_HOST, ""),
+            },
         )
 
     @staticmethod
