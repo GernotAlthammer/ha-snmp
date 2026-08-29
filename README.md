@@ -6,12 +6,12 @@ It started as a copy of Home Assistant's built-in `snmp` platform with a config 
 
 **Domain: `snmp_ui`** (not `snmp`). Home Assistant loads a `custom_components/<domain>` folder *instead of* a built-in integration with the same domain, not alongside it - so if this integration used the `snmp` domain, it would silently disable Home Assistant's built-in SNMP integration for everyone who installs it, and shadow any future core updates to it. Using `snmp_ui` keeps this integration fully independent: the built-in `snmp` integration (and any YAML config using `platform: snmp`) keeps working completely undisturbed, side by side with this one.
 
-## Installation (HACS)
+## 📥 Installation (HACS)
 
 1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/GernotAlthammer/ha-snmp` as type *Integration*.
 2. Install "SNMP (UI Setup)" and restart Home Assistant.
 
-## Adding a device
+## ⚙️ Adding a device
 
 **Settings → Devices & Services → Add Integration → SNMP (UI Setup)** offers three ways in:
 
@@ -35,7 +35,7 @@ Many network printers announce themselves via mDNS/Bonjour. When Home Assistant 
    * Model, Serial Number, Status, Total Pages (whichever the printer supports)
    * One **Level** and **Max** sensor per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has)
 
-## Adding sensors manually
+## ⚙️ Adding sensors manually
 
 1. On the SNMP integration/device, click **Configure**.
 2. Choose **Add a sensor** and fill in:
