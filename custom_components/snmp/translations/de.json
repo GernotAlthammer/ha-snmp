@@ -43,10 +43,16 @@
         "data": {
           "host": "Hinzuzufügende Drucker"
         }
+      },
+      "zeroconf_confirm": {
+        "title": "SNMP-Drucker gefunden",
+        "description": "{model} unter {host} gefunden. Hinzufügen? Alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt."
       }
     },
     "abort": {
       "already_configured": "Dieses Gerät ist bereits eingerichtet.",
+      "already_in_progress": "Die Erkennung für dieses Gerät läuft bereits.",
+      "not_printer": "Dieses Gerät antwortet nicht auf SNMP und kann nicht automatisch eingerichtet werden.",
       "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
       "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
       "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
