@@ -11,12 +11,25 @@ It is based on Home Assistant's built-in `snmp` sensor platform, with a config f
 
 ## Adding a device
 
-1. **Settings → Devices & Services → Add Integration → SNMP**.
+**Settings → Devices & Services → Add Integration → SNMP** offers two ways in:
+
+### Manually
+
+1. Choose **Enter a device manually**.
 2. Enter the device's IP address (or hostname), port (default `161`) and SNMP version (`1`, `2c` or `3`).
    * For SNMP v3 you'll be asked for the username, auth/priv protocols and keys on the next screen.
-3. Submitting creates a device entry with no sensors yet.
+3. Submitting creates a device entry with no sensors yet - add them as described below.
 
-## Adding sensors to a device
+### Automatic printer discovery
+
+1. Choose **Scan the network for printers**.
+2. Enter a subnet (e.g. `192.168.1.0/24`), the SNMP version (`1`/`2c`) and community used by your printers.
+3. Home Assistant probes every address in that subnet for SNMP's printer-status OID. Devices that answer are listed with their model.
+4. Pick which of the found printers to add (all are pre-selected). For each one, a device is created **and all of its sensors are generated automatically** - no OIDs to type in:
+   * Model, Serial Number, Status, Total Pages (whichever the printer supports)
+   * One **Level** and **Max** sensor per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has)
+
+## Adding sensors manually
 
 1. On the SNMP integration/device, click **Configure**.
 2. Choose **Add a sensor** and fill in:
@@ -25,6 +38,8 @@ It is based on Home Assistant's built-in `snmp` sensor platform, with a config f
    * **Base OID** – the OID to poll, e.g. `1.3.6.1.2.1.43.11.1.1.9.1.1`.
 3. Repeat for every OID you want to expose. Each sensor is polled every 10 seconds.
 4. Use **Remove a sensor** in the same **Configure** menu to delete sensors again.
+
+This works the same way for sensors that were added automatically via network discovery - you can always add more or remove ones you don't need.
 
 All sensors added for a device are grouped under that device in Home Assistant.
 
