@@ -11,7 +11,11 @@ It is based on Home Assistant's built-in `snmp` sensor platform, with a config f
 
 ## Adding a device
 
-**Settings → Devices & Services → Add Integration → SNMP** offers two ways in:
+**Settings → Devices & Services → Add Integration → SNMP** offers three ways in:
+
+### Automatically via mDNS (zeroconf)
+
+Many network printers announce themselves via mDNS/Bonjour. When Home Assistant sees such an announcement, it silently probes the device's SNMP printer-status OID (with the default `public` community, v2c then v1) - if that succeeds, a **discovery card** shows up under Settings → Devices & Services with the printer's model, ready to confirm. Confirming builds the full sensor set automatically, exactly like the network scan below. If the printer isn't reachable via SNMP (e.g. AirPrint/IPP-only, or a non-default community), no card is shown - use one of the other two methods instead.
 
 ### Manually
 
@@ -20,7 +24,7 @@ It is based on Home Assistant's built-in `snmp` sensor platform, with a config f
    * For SNMP v3 you'll be asked for the username, auth/priv protocols and keys on the next screen.
 3. Submitting creates a device entry with no sensors yet - add them as described below.
 
-### Automatic printer discovery
+### Automatic printer discovery (subnet scan)
 
 1. Choose **Scan the network for printers**.
 2. Enter a subnet (e.g. `192.168.1.0/24`), the SNMP version (`1`/`2c`) and community used by your printers.
