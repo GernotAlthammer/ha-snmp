@@ -1,4 +1,4 @@
-# ha-snmp
+# HA-SNMP - SNMP Integration for Home Assistant with UI Setup
 
 Home Assistant SNMP integration with UI setup, distributed as a [HACS](https://hacs.xyz/) custom integration.
 
