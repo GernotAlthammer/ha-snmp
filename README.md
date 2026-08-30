@@ -1,8 +1,4 @@
-# HA-SNMP - SNMP Integration for Home Assistant with UI Setup
-
-[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-integration-41BDF5?logo=home-assistant)](https://www.home-assistant.io/)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+# ha-snmp
 
 Home Assistant SNMP integration with UI setup, distributed as a [HACS](https://hacs.xyz/) custom integration.
 
@@ -10,27 +6,29 @@ It started as a copy of Home Assistant's built-in `snmp` platform with a config 
 
 **Domain: `snmp_ui`** (not `snmp`). Home Assistant loads a `custom_components/<domain>` folder *instead of* a built-in integration with the same domain, not alongside it - so if this integration used the `snmp` domain, it would silently disable Home Assistant's built-in SNMP integration for everyone who installs it, and shadow any future core updates to it. Using `snmp_ui` keeps this integration fully independent: the built-in `snmp` integration (and any YAML config using `platform: snmp`) keeps working completely undisturbed, side by side with this one.
 
-## 📥 Installation (HACS)
+## Installation (HACS)
 
 1. HACS → Integrations → ⋮ → Custom repositories → add `https://github.com/GernotAlthammer/ha-snmp` as type *Integration*.
 2. Install "SNMP (UI Setup)" and restart Home Assistant.
 
-## ⚙️ Adding a device
+## Adding a device
 
-**Settings → Devices & Services → Add Integration → SNMP (UI Setup)** offers three ways in:
+**Settings → Devices & Services → Add Integration → SNMP (UI Setup)** offers four ways in:
 
-### ✨ Automatically via mDNS (zeroconf)
+### Automatically via mDNS (zeroconf) - printers only
 
-Many network printers announce themselves via mDNS/Bonjour. When Home Assistant sees such an announcement, it silently probes the device's SNMP printer-status OID (with the default `public` community, v2c then v1) - if that succeeds, a **discovery card** shows up under Settings → Devices & Services with the printer's model, ready to confirm. Confirming builds the full sensor set automatically, exactly like the network scan below. If the printer isn't reachable via SNMP (e.g. AirPrint/IPP-only, or a non-default community), no card is shown - use one of the other two methods instead.
+Many network printers announce themselves via mDNS/Bonjour. When Home Assistant sees such an announcement, it silently probes the device's SNMP printer-status OID (with the default `public` community, v2c then v1) - if that succeeds, a **discovery card** shows up under Settings → Devices & Services with the printer's model, ready to confirm. Confirming builds the full sensor set automatically, exactly like the network scan below. If the printer isn't reachable via SNMP (e.g. AirPrint/IPP-only, or a non-default community), no card is shown - use one of the other methods instead.
 
-### 🖥️ Manually
+Network switches generally don't announce themselves via mDNS, so this discovery path only applies to printers; use the subnet scan below for switches.
+
+### Manually
 
 1. Choose **Enter a device manually**.
 2. Enter the device's IP address (or hostname), port (default `161`) and SNMP version (`1`, `2c` or `3`).
    * For SNMP v3 you'll be asked for the username, auth/priv protocols and keys on the next screen.
 3. Submitting creates a device entry with no sensors yet - add them as described below.
 
-### ⚡ Automatic printer discovery (subnet scan)
+### Automatic printer discovery (subnet scan)
 
 1. Choose **Scan the network for printers**.
 2. Enter a subnet (e.g. `192.168.1.0/24`), the SNMP version (`1`/`2c`) and community used by your printers.
@@ -39,7 +37,16 @@ Many network printers announce themselves via mDNS/Bonjour. When Home Assistant 
    * Model, Serial Number, Status, Total Pages (whichever the printer supports)
    * One **Level** and **Max** sensor per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has)
 
-## ⚙️ Adding sensors manually
+### Automatic network switch discovery (subnet scan)
+
+1. Choose **Scan the network for network switches**.
+2. Enter a subnet (e.g. `192.168.1.0/24`), the SNMP version (`1`/`2c`) and community used by your switches.
+3. Home Assistant probes every address in that subnet for support of the standard Bridge-MIB (`dot1dBaseNumPorts`) - this OID only exists on devices that are actually managed switches/bridges, so it's a reliable "is this a switch" check regardless of vendor.
+4. Pick which of the found switches to add (all are pre-selected). For each one, a device is created **and its sensors are generated automatically**:
+   * Description (`sysDescr`) and Port Count (`dot1dBaseNumPorts`), if supported
+   * One **Status** sensor per physical port (raw `ifOperStatus`: `1` = up, `2` = down, `3` = testing), discovered by walking the switch's interface table (`ifDescr`) - works for switches with any number of ports
+
+## Adding sensors manually
 
 1. On the SNMP integration/device, click **Configure**.
 2. Choose **Add a sensor** and fill in:
@@ -53,7 +60,7 @@ This works the same way for sensors that were added automatically via network di
 
 All sensors added for a device are grouped under that device in Home Assistant.
 
-## 🔍 YAML configuration
+## YAML configuration
 
 This integration also ships its own copies of the `sensor`, `switch` and `device_tracker` platforms (identical logic to Home Assistant's built-in ones), reachable under `platform: snmp_ui` instead of `platform: snmp`. You only need this if you specifically want your YAML-configured entities managed by this integration rather than the built-in one - for plain YAML use, Home Assistant's built-in `snmp:` platform (`platform: snmp`) is unaffected by installing this integration and works exactly as before.
 
