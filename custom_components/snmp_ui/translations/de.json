@@ -40,7 +40,7 @@
       },
       "discover_printers_select": {
         "title": "Gefundene Drucker",
-        "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt.",
+        "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - Modell und Seriennummer werden als Geräte-Informationen angezeigt, Status/Seitenzähler sowie ein Füllstand-Sensor je Tonerpatrone (in %) werden automatisch angelegt. Max-Füllgrad-Sensoren werden standardmäßig weggelassen - bei Bedarf nachträglich manuell hinzufügen.",
         "data": {
           "host": "Hinzuzufügende Drucker"
         }
@@ -64,7 +64,7 @@
       },
       "zeroconf_confirm": {
         "title": "SNMP-Drucker gefunden",
-        "description": "{model} unter {host} gefunden. Hinzufügen? Alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt."
+        "description": "{model} unter {host} gefunden. Hinzufügen? Modell und Seriennummer werden als Geräte-Informationen angezeigt, Status/Seitenzähler sowie ein Füllstand-Sensor je Tonerpatrone (in %) werden automatisch angelegt."
       }
     },
     "abort": {
@@ -97,7 +97,8 @@
         "data": {
           "name": "Name",
           "community": "Community",
-          "baseoid": "Base OID"
+          "baseoid": "Base OID",
+          "unit_of_measurement": "Einheit (optional, z. B. %)"
         }
       },
       "remove_sensor": {
