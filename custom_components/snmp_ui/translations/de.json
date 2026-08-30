@@ -5,7 +5,8 @@
         "title": "SNMP-Gerät hinzufügen",
         "menu_options": {
           "manual": "Gerät manuell eingeben",
-          "discover": "Netzwerk nach Druckern durchsuchen"
+          "discover_printers": "Netzwerk nach Druckern durchsuchen",
+          "discover_switches": "Netzwerk nach Netzwerk-Switches durchsuchen"
         }
       },
       "manual": {
@@ -27,7 +28,7 @@
           "priv_key": "Verschlüsselungsschlüssel"
         }
       },
-      "discover": {
+      "discover_printers": {
         "title": "Netzwerk nach Druckern durchsuchen",
         "description": "Durchsucht ein Subnetz nach Geräten, die als SNMP-Drucker antworten (SNMP v1/v2c). SNMPv3-Geräte müssen manuell hinzugefügt werden.",
         "data": {
@@ -37,11 +38,28 @@
           "port": "Port"
         }
       },
-      "discover_select": {
+      "discover_printers_select": {
         "title": "Gefundene Drucker",
         "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - alle Sensoren (Modell, Status, Seitenzähler, Toner-/Tintenstände) werden automatisch angelegt.",
         "data": {
           "host": "Hinzuzufügende Drucker"
+        }
+      },
+      "discover_switches": {
+        "title": "Netzwerk nach Netzwerk-Switches durchsuchen",
+        "description": "Durchsucht ein Subnetz nach Geräten, die die Bridge-MIB unterstützen (also als verwalteter Switch antworten), per SNMP v1/v2c. SNMPv3-Geräte müssen manuell hinzugefügt werden.",
+        "data": {
+          "subnet": "Subnetz (z. B. 192.168.1.0/24)",
+          "version": "SNMP-Version",
+          "community": "Community",
+          "port": "Port"
+        }
+      },
+      "discover_switches_select": {
+        "title": "Gefundene Switches",
+        "description": "{count} Switch(es) gefunden. Auswählen, welche hinzugefügt werden sollen - ein Sensorsatz (Beschreibung, Portanzahl, ein Status-Sensor je Port) wird automatisch angelegt.",
+        "data": {
+          "host": "Hinzuzufügende Switches"
         }
       },
       "zeroconf_confirm": {
@@ -55,12 +73,14 @@
       "not_printer": "Dieses Gerät antwortet nicht auf SNMP und kann nicht automatisch eingerichtet werden.",
       "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
       "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
-      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
+      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden.",
+      "no_switches_found": "In diesem Subnetz wurden keine SNMP-verwalteten Netzwerk-Switches gefunden."
     },
     "error": {
       "invalid_subnet": "Das sieht nicht nach einem gültigen Subnetz aus (z. B. 192.168.1.0/24).",
       "subnet_too_large": "Dieses Subnetz ist zu groß zum Durchsuchen.",
-      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden."
+      "no_printers_found": "In diesem Subnetz wurden keine SNMP-Drucker gefunden.",
+      "no_switches_found": "In diesem Subnetz wurden keine SNMP-verwalteten Netzwerk-Switches gefunden."
     }
   },
   "options": {

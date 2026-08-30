@@ -5,7 +5,8 @@
         "title": "Add SNMP device",
         "menu_options": {
           "manual": "Enter a device manually",
-          "discover": "Scan the network for printers"
+          "discover_printers": "Scan the network for printers",
+          "discover_switches": "Scan the network for network switches"
         }
       },
       "manual": {
@@ -27,7 +28,7 @@
           "priv_key": "Privacy key"
         }
       },
-      "discover": {
+      "discover_printers": {
         "title": "Scan the network for printers",
         "description": "Scans a subnet for devices that answer as an SNMP printer, using SNMP v1/v2c. SNMPv3 devices must be added manually.",
         "data": {
@@ -37,11 +38,28 @@
           "port": "Port"
         }
       },
-      "discover_select": {
+      "discover_printers_select": {
         "title": "Printers found",
         "description": "{count} printer(s) found. Pick which ones to add - all sensors (model, status, page count, toner/ink levels) are created automatically.",
         "data": {
           "host": "Printers to add"
+        }
+      },
+      "discover_switches": {
+        "title": "Scan the network for network switches",
+        "description": "Scans a subnet for devices that support the Bridge-MIB (i.e. respond as a managed switch), using SNMP v1/v2c. SNMPv3 devices must be added manually.",
+        "data": {
+          "subnet": "Subnet (e.g. 192.168.1.0/24)",
+          "version": "SNMP version",
+          "community": "Community",
+          "port": "Port"
+        }
+      },
+      "discover_switches_select": {
+        "title": "Switches found",
+        "description": "{count} switch(es) found. Pick which ones to add - a sensor set (description, port count, one status sensor per port) is created automatically.",
+        "data": {
+          "host": "Switches to add"
         }
       },
       "zeroconf_confirm": {
@@ -55,12 +73,14 @@
       "not_printer": "This device doesn't respond to SNMP and can't be set up automatically.",
       "invalid_subnet": "That doesn't look like a valid subnet (e.g. 192.168.1.0/24).",
       "subnet_too_large": "That subnet is too large to scan.",
-      "no_printers_found": "No SNMP printers were found on that subnet."
+      "no_printers_found": "No SNMP printers were found on that subnet.",
+      "no_switches_found": "No SNMP-managed network switches were found on that subnet."
     },
     "error": {
       "invalid_subnet": "That doesn't look like a valid subnet (e.g. 192.168.1.0/24).",
       "subnet_too_large": "That subnet is too large to scan.",
-      "no_printers_found": "No SNMP printers were found on that subnet."
+      "no_printers_found": "No SNMP printers were found on that subnet.",
+      "no_switches_found": "No SNMP-managed network switches were found on that subnet."
     }
   },
   "options": {
