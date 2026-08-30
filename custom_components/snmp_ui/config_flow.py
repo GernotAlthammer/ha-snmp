@@ -10,13 +10,20 @@ Two-tier setup, matching how SNMP is actually used on a network:
   one is parametrized with exactly the three fields requested: Name,
   Community and Base OID.
 
-On top of the manual path, devices can also be found automatically: a
-network scan (`async_step_discover`) probes a subnet for printers that
-answer SNMP's Host Resources "printer status" OID, and - once the user picks
-which of the found printers to add - builds a full sensor set for each of
-them automatically (model, serial number, status, page count and one "Level"
-sensor per toner/ink marker discovered via an SNMP table walk), without the
-user having to type in any OIDs.
+On top of the manual path, devices can also be found automatically:
+
+* A network scan for **printers** (`async_step_discover_printers`) probes a
+  subnet for devices that answer SNMP's Host Resources "printer status" OID,
+  and builds a full sensor set for each selected printer automatically
+  (model, serial number, status, page count and one "Level"/"Max" sensor
+  pair per toner/ink marker found via an SNMP table walk).
+* A network scan for **network switches** (`async_step_discover_switches`)
+  probes a subnet for devices that support the standard Bridge-MIB (i.e.
+  answer `dot1dBaseNumPorts`), and builds a sensor set for each selected
+  switch automatically (description, port count and one "Status" sensor per
+  physical port, discovered via an IF-MIB table walk).
+
+Either way, the user never has to type in an OID by hand.
 """
 
 from __future__ import annotations
@@ -60,12 +67,17 @@ from .const import (
     MAP_AUTH_PROTOCOLS,
     MAP_PRIV_PROTOCOLS,
     OID_DEVICE_MODEL,
+    OID_DOT1D_BASE_NUM_PORTS,
+    OID_IF_DESCR,
+    OID_IF_OPER_STATUS,
     OID_MARKER_SUPPLIES_DESCRIPTION,
     OID_MARKER_SUPPLIES_LEVEL,
     OID_MARKER_SUPPLIES_MAX,
     OID_PRINTER_NAME,
     OID_PRINTER_STATUS,
     OID_SERIAL_NUMBER,
+    OID_SYS_DESCR,
+    OID_SYS_NAME,
     OID_TOTAL_PAGES,
     SCAN_CONCURRENCY,
     SCAN_MAX_HOSTS,
@@ -157,6 +169,22 @@ def _discover_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
     )
 
 
+def _discover_select_schema(scan_results: list[dict[str, Any]]) -> vol.Schema:
+    options = [
+        {"value": result[CONF_HOST], "label": f"{result['label']} ({result[CONF_HOST]})"}
+        for result in scan_results
+    ]
+    return vol.Schema(
+        {
+            vol.Required(CONF_HOST, default=[o["value"] for o in options]): SelectSelector(
+                SelectSelectorConfig(
+                    options=options, multiple=True, mode=SelectSelectorMode.LIST
+                )
+            )
+        }
+    )
+
+
 async def _build_printer_sensors(
     hass: Any, host: str, port: int, version: str, community: str
 ) -> tuple[str, list[dict[str, Any]]]:
@@ -220,6 +248,65 @@ async def _build_printer_sensors(
     return display_name, sensors
 
 
+async def _build_switch_sensors(
+    hass: Any, host: str, port: int, version: str, community: str
+) -> tuple[str, list[dict[str, Any]]]:
+    """Probe one network switch and build its full sensor set automatically.
+
+    Returns a display name for the device plus a ready-to-store list of
+    sensor dicts, covering the switch's description, port count and one
+    "Status" sensor per physical port found via an IF-MIB table walk (raw
+    ifOperStatus values: 1=up, 2=down, 3=testing). Any field the switch
+    doesn't support is silently skipped.
+    """
+
+    async def probe(oid: str) -> str | None:
+        return await async_snmp_probe(hass, host, port, version, community, oid)
+
+    sys_name, sys_descr, num_ports = await asyncio.gather(
+        probe(OID_SYS_NAME),
+        probe(OID_SYS_DESCR),
+        probe(OID_DOT1D_BASE_NUM_PORTS),
+    )
+
+    display_name = (sys_name or sys_descr or host or "").strip() or host
+
+    sensors: list[dict[str, Any]] = []
+
+    def add_sensor(label: str, value: str | None, oid: str) -> None:
+        if value is None:
+            return
+        sensors.append(
+            {
+                CONF_SENSOR_ID: uuid4().hex[:8],
+                CONF_NAME: f"{display_name} {label}",
+                CONF_COMMUNITY: community,
+                CONF_BASEOID: oid,
+            }
+        )
+
+    add_sensor("Description", sys_descr, OID_SYS_DESCR)
+    add_sensor("Port Count", num_ports, OID_DOT1D_BASE_NUM_PORTS)
+
+    # Switches can have many ports (24/48+), so allow a larger walk than the
+    # printer marker walk (which is typically at most 4-5 rows).
+    port_rows = await async_snmp_walk_table(
+        hass, host, port, version, community, OID_IF_DESCR, max_rows=64
+    )
+
+    async def build_port(suffix: str, descr: str) -> None:
+        clean_descr = (descr or "").strip(" \x00") or f"Port {suffix}"
+        status_oid = f"{OID_IF_OPER_STATUS}.{suffix}"
+        status = await probe(status_oid)
+        add_sensor(f"Port {clean_descr} Status", status, status_oid)
+
+    await asyncio.gather(
+        *(build_port(suffix, descr) for suffix, descr in port_rows)
+    )
+
+    return display_name, sensors
+
+
 class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle adding a new SNMP device."""
 
@@ -241,7 +328,8 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> Any:
         """Let the user pick between manual entry and a network scan."""
         return self.async_show_menu(
-            step_id="user", menu_options=["manual", "discover"]
+            step_id="user",
+            menu_options=["manual", "discover_printers", "discover_switches"],
         )
 
     async def async_step_manual(
@@ -288,7 +376,7 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="auth", data_schema=_auth_schema())
 
-    async def async_step_discover(
+    async def async_step_discover_printers(
         self, user_input: dict[str, Any] | None = None
     ) -> Any:
         """Scan a subnet for printers (SNMP v1/v2c only)."""
@@ -310,7 +398,8 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
                     errors["base"] = "subnet_too_large"
                 else:
                     results = await self._async_scan_hosts(
-                        hosts, version, community, port
+                        hosts, version, community, port,
+                        detect_oid=OID_PRINTER_STATUS, label_oid=OID_DEVICE_MODEL,
                     )
                     if not results:
                         errors["base"] = "no_printers_found"
@@ -321,10 +410,52 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
                             CONF_COMMUNITY: community,
                             CONF_PORT: port,
                         }
-                        return await self.async_step_discover_select()
+                        return await self.async_step_discover_printers_select()
 
         return self.async_show_form(
-            step_id="discover",
+            step_id="discover_printers",
+            data_schema=_discover_schema(user_input),
+            errors=errors,
+        )
+
+    async def async_step_discover_switches(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Scan a subnet for network switches (SNMP v1/v2c only)."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            subnet = user_input[CONF_SUBNET]
+            version = user_input.get(CONF_VERSION, "2c")
+            community = user_input.get(CONF_COMMUNITY, DEFAULT_COMMUNITY)
+            port = user_input.get(CONF_PORT, int(DEFAULT_PORT))
+
+            try:
+                network = ipaddress.ip_network(subnet, strict=False)
+            except ValueError:
+                errors["base"] = "invalid_subnet"
+            else:
+                hosts = list(network.hosts()) or [network.network_address]
+                if len(hosts) > SCAN_MAX_HOSTS:
+                    errors["base"] = "subnet_too_large"
+                else:
+                    results = await self._async_scan_hosts(
+                        hosts, version, community, port,
+                        detect_oid=OID_DOT1D_BASE_NUM_PORTS, label_oid=OID_SYS_DESCR,
+                    )
+                    if not results:
+                        errors["base"] = "no_switches_found"
+                    else:
+                        self._scan_results = results
+                        self._scan_params = {
+                            CONF_VERSION: version,
+                            CONF_COMMUNITY: community,
+                            CONF_PORT: port,
+                        }
+                        return await self.async_step_discover_switches_select()
+
+        return self.async_show_form(
+            step_id="discover_switches",
             data_schema=_discover_schema(user_input),
             errors=errors,
         )
@@ -335,8 +466,16 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
         version: str,
         community: str,
         port: int,
+        detect_oid: str,
+        label_oid: str,
     ) -> list[dict[str, Any]]:
-        """Probe every host in `hosts` concurrently for a printer."""
+        """Probe every host in `hosts` concurrently for a matching device.
+
+        A host is considered a match if it answers `detect_oid` (the
+        device-type indicator - e.g. hrPrinterStatus for printers,
+        dot1dBaseNumPorts for switches). `label_oid` is fetched purely for
+        display purposes in the selection list.
+        """
         semaphore = asyncio.Semaphore(SCAN_CONCURRENCY)
         existing = {
             entry.data.get(CONF_HOST) for entry in self._async_current_entries()
@@ -347,22 +486,22 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
             if host in existing:
                 return None
             async with semaphore:
-                status = await async_snmp_probe(
-                    self.hass, host, port, version, community, OID_PRINTER_STATUS,
+                detected = await async_snmp_probe(
+                    self.hass, host, port, version, community, detect_oid,
                     timeout=SCAN_TIMEOUT,
                 )
-                if status is None:
+                if detected is None:
                     return None
-                model = await async_snmp_probe(
-                    self.hass, host, port, version, community, OID_DEVICE_MODEL,
+                label = await async_snmp_probe(
+                    self.hass, host, port, version, community, label_oid,
                     timeout=SCAN_TIMEOUT,
                 )
-            return {CONF_HOST: host, "model": model or host}
+            return {CONF_HOST: host, "label": label or host}
 
         results = await asyncio.gather(*(probe(ip) for ip in hosts))
         return [result for result in results if result]
 
-    async def async_step_discover_select(
+    async def async_step_discover_printers_select(
         self, user_input: dict[str, Any] | None = None
     ) -> Any:
         """Let the user pick which discovered printers to add."""
@@ -385,49 +524,83 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             )
 
-            prepared = [
-                {
-                    "data": {
-                        CONF_HOST: result[CONF_HOST],
-                        CONF_PORT: port,
-                        CONF_VERSION: version,
-                    },
-                    "title": display_name,
-                    "options": {CONF_SENSORS: sensors},
-                }
-                for result, (display_name, sensors) in zip(selected, built)
-            ]
+            return await self._async_finish_discovery_select(
+                selected, built, port, version
+            )
 
-            # This flow can only finish with a single config entry. Kick off
-            # an independent background flow for every additional printer
-            # and finish this one with the first.
-            for extra in prepared[1:]:
-                self.hass.async_create_task(
-                    self.hass.config_entries.flow.async_init(
-                        DOMAIN, context={"source": SOURCE_IMPORT}, data=extra
-                    )
-                )
-
-            return await self.async_step_import(prepared[0])
-
-        options = [
-            {"value": result[CONF_HOST], "label": f"{result['model']} ({result[CONF_HOST]})"}
-            for result in self._scan_results
-        ]
-        schema = vol.Schema(
-            {
-                vol.Required(CONF_HOST, default=[o["value"] for o in options]): SelectSelector(
-                    SelectSelectorConfig(
-                        options=options, multiple=True, mode=SelectSelectorMode.LIST
-                    )
-                )
-            }
-        )
         return self.async_show_form(
-            step_id="discover_select",
-            data_schema=schema,
+            step_id="discover_printers_select",
+            data_schema=_discover_select_schema(self._scan_results),
             description_placeholders={"count": str(len(self._scan_results))},
         )
+
+    async def async_step_discover_switches_select(
+        self, user_input: dict[str, Any] | None = None
+    ) -> Any:
+        """Let the user pick which discovered switches to add."""
+        if user_input is not None:
+            selected_hosts = set(user_input[CONF_HOST])
+            selected = [
+                r for r in self._scan_results if r[CONF_HOST] in selected_hosts
+            ]
+
+            version = self._scan_params[CONF_VERSION]
+            community = self._scan_params[CONF_COMMUNITY]
+            port = self._scan_params[CONF_PORT]
+
+            built = await asyncio.gather(
+                *(
+                    _build_switch_sensors(
+                        self.hass, result[CONF_HOST], port, version, community
+                    )
+                    for result in selected
+                )
+            )
+
+            return await self._async_finish_discovery_select(
+                selected, built, port, version
+            )
+
+        return self.async_show_form(
+            step_id="discover_switches_select",
+            data_schema=_discover_select_schema(self._scan_results),
+            description_placeholders={"count": str(len(self._scan_results))},
+        )
+
+    async def _async_finish_discovery_select(
+        self,
+        selected: list[dict[str, Any]],
+        built: list[tuple[str, list[dict[str, Any]]]],
+        port: int,
+        version: str,
+    ) -> Any:
+        """Turn selected+built devices into config entries.
+
+        This flow can only finish with a single config entry, so an
+        independent background flow is kicked off for every additional
+        device and this one finishes with the first.
+        """
+        prepared = [
+            {
+                "data": {
+                    CONF_HOST: result[CONF_HOST],
+                    CONF_PORT: port,
+                    CONF_VERSION: version,
+                },
+                "title": display_name,
+                "options": {CONF_SENSORS: sensors},
+            }
+            for result, (display_name, sensors) in zip(selected, built)
+        ]
+
+        for extra in prepared[1:]:
+            self.hass.async_create_task(
+                self.hass.config_entries.flow.async_init(
+                    DOMAIN, context={"source": SOURCE_IMPORT}, data=extra
+                )
+            )
+
+        return await self.async_step_import(prepared[0])
 
     async def async_step_import(self, import_data: dict[str, Any]) -> Any:
         """Create one config entry from fully pre-built discovery data.

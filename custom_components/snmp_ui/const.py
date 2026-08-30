@@ -25,6 +25,16 @@ OID_MARKER_SUPPLIES_DESCRIPTION = "1.3.6.1.2.1.43.11.1.1.6.1"  # prtMarkerSuppli
 OID_MARKER_SUPPLIES_LEVEL = "1.3.6.1.2.1.43.11.1.1.9.1"  # prtMarkerSuppliesLevel
 OID_MARKER_SUPPLIES_MAX = "1.3.6.1.2.1.43.11.1.1.8.1"  # prtMarkerSuppliesMaxCapacity
 
+# Generic MIB-II + Bridge-MIB + IF-MIB OIDs used to auto-detect network
+# switches and auto-create their sensors. `dot1dBaseNumPorts` only exists on
+# devices implementing the Bridge-MIB (RFC 4188), i.e. actual switches/
+# bridges - that's the detection OID, analogous to hrPrinterStatus above.
+OID_SYS_DESCR = "1.3.6.1.2.1.1.1.0"  # sysDescr
+OID_SYS_NAME = "1.3.6.1.2.1.1.5.0"  # sysName
+OID_DOT1D_BASE_NUM_PORTS = "1.3.6.1.2.1.17.1.2.0"  # dot1dBaseNumPorts - switch marker
+OID_IF_DESCR = "1.3.6.1.2.1.2.2.1.2"  # ifDescr (walk, one row per port)
+OID_IF_OPER_STATUS = "1.3.6.1.2.1.2.2.1.8"  # ifOperStatus - 1=up, 2=down, 3=testing, ...
+
 CONF_ACCEPT_ERRORS = "accept_errors"
 CONF_AUTH_KEY = "auth_key"
 CONF_AUTH_PROTOCOL = "auth_protocol"
