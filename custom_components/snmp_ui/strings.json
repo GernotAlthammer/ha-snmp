@@ -40,7 +40,7 @@
       },
       "discover_printers_select": {
         "title": "Printers found",
-        "description": "{count} printer(s) found. Pick which ones to add - all sensors (model, status, page count, toner/ink levels) are created automatically.",
+        "description": "{count} printer(s) found. Pick which ones to add - Model and Serial Number are shown as device info, Status/Total Pages plus one toner/ink Level sensor (in %) per marker are created automatically. Max-capacity sensors are left out by default; add one manually afterwards if needed.",
         "data": {
           "host": "Printers to add"
         }
@@ -64,7 +64,7 @@
       },
       "zeroconf_confirm": {
         "title": "SNMP printer discovered",
-        "description": "Found {model} at {host}. Add it? All sensors (model, status, page count, toner/ink levels) will be created automatically."
+        "description": "Found {model} at {host}. Add it? Model and Serial Number are shown as device info, Status/Total Pages plus one toner/ink Level sensor (in %) per marker are created automatically."
       }
     },
     "abort": {
@@ -97,7 +97,8 @@
         "data": {
           "name": "Name",
           "community": "Community",
-          "baseoid": "Base OID"
+          "baseoid": "Base OID",
+          "unit_of_measurement": "Unit (optional, e.g. %)"
         }
       },
       "remove_sensor": {

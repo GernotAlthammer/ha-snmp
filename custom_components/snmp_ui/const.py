@@ -5,6 +5,15 @@ DOMAIN = "snmp_ui"
 # Keys used inside a config entry's `options[CONF_SENSORS]` list.
 CONF_SENSORS = "sensors"
 CONF_SENSOR_ID = "id"
+CONF_UNIT = "unit_of_measurement"  # optional per-sensor unit, e.g. "%"
+
+# Keys used inside a config entry's `data` dict to store device-level
+# properties (as opposed to sensors) discovered automatically, so they can
+# be shown under "Device info" instead of as separate entities.
+CONF_MODEL = "model"
+CONF_SERIAL_NUMBER = "serial_number"
+
+UNIT_PERCENT = "%"
 
 # Discovery / network scan (printer auto-detection)
 CONF_SUBNET = "subnet"

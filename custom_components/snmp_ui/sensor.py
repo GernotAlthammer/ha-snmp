@@ -57,10 +57,13 @@ from .const import (
     CONF_BASEOID,
     CONF_COMMUNITY,
     CONF_DEFAULT_VALUE,
+    CONF_MODEL,
     CONF_PRIV_KEY,
     CONF_PRIV_PROTOCOL,
     CONF_SENSOR_ID,
     CONF_SENSORS,
+    CONF_SERIAL_NUMBER,
+    CONF_UNIT,
     CONF_VERSION,
     DEFAULT_AUTH_PROTOCOL,
     DEFAULT_COMMUNITY,
@@ -188,6 +191,10 @@ async def async_setup_entry(
         name=entry.title,
         configuration_url=f"http://{entry.data[CONF_HOST]}",
     )
+    if model := entry.data.get(CONF_MODEL):
+        device_info["model"] = model
+    if serial_number := entry.data.get(CONF_SERIAL_NUMBER):
+        device_info["serial_number"] = serial_number
 
     entities: list[SnmpSensor] = []
     for sensor_conf in entry.options.get(CONF_SENSORS, []):
@@ -202,6 +209,8 @@ async def async_setup_entry(
             CONF_NAME: Template(sensor_conf[CONF_NAME], hass),
             CONF_UNIQUE_ID: unique_id,
         }
+        if unit := sensor_conf.get(CONF_UNIT):
+            trigger_entity_config[CONF_UNIT_OF_MEASUREMENT] = unit
         entities.append(
             SnmpSensor(
                 hass,

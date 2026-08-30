@@ -55,11 +55,14 @@ from .const import (
     CONF_AUTH_PROTOCOL,
     CONF_BASEOID,
     CONF_COMMUNITY,
+    CONF_MODEL,
     CONF_PRIV_KEY,
     CONF_PRIV_PROTOCOL,
     CONF_SENSOR_ID,
     CONF_SENSORS,
+    CONF_SERIAL_NUMBER,
     CONF_SUBNET,
+    CONF_UNIT,
     CONF_VERSION,
     DEFAULT_COMMUNITY,
     DEFAULT_PORT,
@@ -72,7 +75,6 @@ from .const import (
     OID_IF_OPER_STATUS,
     OID_MARKER_SUPPLIES_DESCRIPTION,
     OID_MARKER_SUPPLIES_LEVEL,
-    OID_MARKER_SUPPLIES_MAX,
     OID_PRINTER_NAME,
     OID_PRINTER_STATUS,
     OID_SERIAL_NUMBER,
@@ -82,6 +84,7 @@ from .const import (
     SCAN_CONCURRENCY,
     SCAN_MAX_HOSTS,
     SCAN_TIMEOUT,
+    UNIT_PERCENT,
 )
 from .util import async_snmp_probe, async_snmp_walk_table
 
@@ -141,6 +144,7 @@ def _sensor_schema() -> vol.Schema:
             vol.Required(CONF_NAME): TextSelector(),
             vol.Optional(CONF_COMMUNITY, default=DEFAULT_COMMUNITY): TextSelector(),
             vol.Required(CONF_BASEOID): TextSelector(),
+            vol.Optional(CONF_UNIT, default=""): TextSelector(),
         }
     )
 
@@ -187,14 +191,20 @@ def _discover_select_schema(scan_results: list[dict[str, Any]]) -> vol.Schema:
 
 async def _build_printer_sensors(
     hass: Any, host: str, port: int, version: str, community: str
-) -> tuple[str, list[dict[str, Any]]]:
-    """Probe one printer and build its full sensor set automatically.
+) -> tuple[str, list[dict[str, Any]], dict[str, str]]:
+    """Probe one printer and build its sensor set automatically.
 
-    Returns a display name for the device plus a ready-to-store list of
-    sensor dicts (same shape as sensors added manually via the options
-    flow), covering model/serial/status/page-count and one "Level" sensor
-    per toner/ink marker found via an SNMP table walk. Any field the printer
-    doesn't support is silently skipped.
+    Returns a display name for the device, a ready-to-store list of sensor
+    dicts (same shape as sensors added manually via the options flow) - just
+    Status, Total Pages and one "Level" sensor (in %) per toner/ink marker
+    found via an SNMP table walk - plus a `device_data` dict with the
+    printer's Model and Serial Number, meant to be stored on the config
+    entry itself and shown under "Device info" rather than as sensors.
+
+    Max-capacity sensors are intentionally left out by default (the level is
+    already a percentage in practice); add one manually via the options flow
+    if a specific printer needs it. Any field the printer doesn't support is
+    silently skipped.
     """
 
     async def probe(oid: str) -> str | None:
@@ -210,22 +220,29 @@ async def _build_printer_sensors(
 
     display_name = (printer_name or model or host or "").strip() or host
 
+    device_data: dict[str, str] = {}
+    if model:
+        device_data[CONF_MODEL] = model
+    if serial:
+        device_data[CONF_SERIAL_NUMBER] = serial
+
     sensors: list[dict[str, Any]] = []
 
-    def add_sensor(label: str, value: str | None, oid: str) -> None:
+    def add_sensor(
+        label: str, value: str | None, oid: str, unit: str | None = None
+    ) -> None:
         if value is None:
             return
-        sensors.append(
-            {
-                CONF_SENSOR_ID: uuid4().hex[:8],
-                CONF_NAME: f"{display_name} {label}",
-                CONF_COMMUNITY: community,
-                CONF_BASEOID: oid,
-            }
-        )
+        sensor: dict[str, Any] = {
+            CONF_SENSOR_ID: uuid4().hex[:8],
+            CONF_NAME: f"{display_name} {label}",
+            CONF_COMMUNITY: community,
+            CONF_BASEOID: oid,
+        }
+        if unit:
+            sensor[CONF_UNIT] = unit
+        sensors.append(sensor)
 
-    add_sensor("Model", model, OID_DEVICE_MODEL)
-    add_sensor("Serial Number", serial, OID_SERIAL_NUMBER)
     add_sensor("Status", status, OID_PRINTER_STATUS)
     add_sensor("Total Pages", pages, OID_TOTAL_PAGES)
 
@@ -236,28 +253,27 @@ async def _build_printer_sensors(
     async def build_marker(suffix: str, description: str) -> None:
         clean_description = (description or "").strip(" \x00") or f"Marker {suffix}"
         level_oid = f"{OID_MARKER_SUPPLIES_LEVEL}.{suffix}"
-        max_oid = f"{OID_MARKER_SUPPLIES_MAX}.{suffix}"
-        level, max_capacity = await asyncio.gather(probe(level_oid), probe(max_oid))
-        add_sensor(f"{clean_description} Level", level, level_oid)
-        add_sensor(f"{clean_description} Max", max_capacity, max_oid)
+        level = await probe(level_oid)
+        add_sensor(f"{clean_description} Level", level, level_oid, unit=UNIT_PERCENT)
 
     await asyncio.gather(
         *(build_marker(suffix, description) for suffix, description in marker_rows)
     )
 
-    return display_name, sensors
+    return display_name, sensors, device_data
 
 
 async def _build_switch_sensors(
     hass: Any, host: str, port: int, version: str, community: str
-) -> tuple[str, list[dict[str, Any]]]:
+) -> tuple[str, list[dict[str, Any]], dict[str, str]]:
     """Probe one network switch and build its full sensor set automatically.
 
-    Returns a display name for the device plus a ready-to-store list of
-    sensor dicts, covering the switch's description, port count and one
-    "Status" sensor per physical port found via an IF-MIB table walk (raw
-    ifOperStatus values: 1=up, 2=down, 3=testing). Any field the switch
-    doesn't support is silently skipped.
+    Returns a display name for the device, a ready-to-store list of sensor
+    dicts, covering the switch's description, port count and one "Status"
+    sensor per physical port found via an IF-MIB table walk (raw
+    ifOperStatus values: 1=up, 2=down, 3=testing), plus an empty
+    `device_data` dict (switches have no Model/Serial Number equivalent
+    handled here). Any field the switch doesn't support is silently skipped.
     """
 
     async def probe(oid: str) -> str | None:
@@ -304,7 +320,7 @@ async def _build_switch_sensors(
         *(build_port(suffix, descr) for suffix, descr in port_rows)
     )
 
-    return display_name, sensors
+    return display_name, sensors, {}
 
 
 class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -570,7 +586,7 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
     async def _async_finish_discovery_select(
         self,
         selected: list[dict[str, Any]],
-        built: list[tuple[str, list[dict[str, Any]]]],
+        built: list[tuple[str, list[dict[str, Any]], dict[str, str]]],
         port: int,
         version: str,
     ) -> Any:
@@ -586,11 +602,12 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_HOST: result[CONF_HOST],
                     CONF_PORT: port,
                     CONF_VERSION: version,
+                    **device_data,
                 },
                 "title": display_name,
                 "options": {CONF_SENSORS: sensors},
             }
-            for result, (display_name, sensors) in zip(selected, built)
+            for result, (display_name, sensors, device_data) in zip(selected, built)
         ]
 
         for extra in prepared[1:]:
@@ -677,7 +694,7 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
         """Confirm adding a printer found via zeroconf, building its sensors."""
         if user_input is not None:
             info = self._zeroconf_info
-            display_name, sensors = await _build_printer_sensors(
+            display_name, sensors, device_data = await _build_printer_sensors(
                 self.hass,
                 info[CONF_HOST],
                 info[CONF_PORT],
@@ -690,6 +707,7 @@ class SNMPConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_HOST: info[CONF_HOST],
                     CONF_PORT: info[CONF_PORT],
                     CONF_VERSION: info[CONF_VERSION],
+                    **device_data,
                 },
                 options={CONF_SENSORS: sensors},
             )
@@ -741,6 +759,8 @@ class SNMPOptionsFlow(OptionsFlow):
                 CONF_COMMUNITY: user_input.get(CONF_COMMUNITY, DEFAULT_COMMUNITY),
                 CONF_BASEOID: user_input[CONF_BASEOID],
             }
+            if unit := user_input.get(CONF_UNIT):
+                sensor[CONF_UNIT] = unit
             self._sensors.append(sensor)
             return self.async_create_entry(
                 title="", data={CONF_SENSORS: self._sensors}
