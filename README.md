@@ -37,9 +37,11 @@ Network switches generally don't announce themselves via mDNS, so this discovery
 1. Choose **Scan the network for printers**.
 2. Enter a subnet (e.g. `192.168.1.0/24`), the SNMP version (`1`/`2c`) and community used by your printers.
 3. Home Assistant probes every address in that subnet for SNMP's printer-status OID. Devices that answer are listed with their model.
-4. Pick which of the found printers to add (all are pre-selected). For each one, a device is created **and all of its sensors are generated automatically** - no OIDs to type in:
-   * Model, Serial Number, Status, Total Pages (whichever the printer supports)
-   * One **Level** and **Max** sensor per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has)
+4. Pick which of the found printers to add (all are pre-selected). For each one, a device is created and populated automatically - no OIDs to type in:
+   * **Model** and **Serial Number** are stored as device properties and shown under the device's "Device info" section, not as separate sensors.
+   * **Status** and **Total Pages** sensors (whichever the printer supports).
+   * One **Level** sensor (in **%**) per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has).
+   * **Max-capacity** sensors are left out by default to keep the entity list lean - add one manually afterwards (see below) if you need it for a specific marker, e.g. `1.3.6.1.2.1.43.11.1.1.8.1.<marker index>`.
 
 ### Automatic network switch discovery (subnet scan)
 
@@ -57,6 +59,7 @@ Network switches generally don't announce themselves via mDNS, so this discovery
    * **Name** – the sensor's display name.
    * **Community** – the SNMP community string (used for v1/v2c; ignored for v3, which uses the device's user credentials).
    * **Base OID** – the OID to poll, e.g. `1.3.6.1.2.1.43.11.1.1.9.1.1`.
+   * **Unit** (optional) – e.g. `%`, shown next to the sensor's value.
 3. Repeat for every OID you want to expose. Each sensor is polled every 10 seconds.
 4. Use **Remove a sensor** in the same **Configure** menu to delete sensors again.
 
@@ -75,3 +78,7 @@ Versions of this integration prior to the `snmp_ui` rename used the `snmp` domai
 1. Update to this version and restart Home Assistant.
 2. Existing config entries created under the old `snmp` domain are not automatically migrated (Home Assistant ties config entries to a domain). Remove them under Settings → Devices & Services and re-add your devices via **SNMP (UI Setup)**.
 3. If you had `platform: snmp` in YAML specifically to reach this integration's sensor/switch/device_tracker platforms, change it to `platform: snmp_ui`.
+
+## Note on previously auto-discovered printers
+
+Printers added via network/mDNS discovery *before* Model/Serial Number became device properties (and Max-capacity sensors were dropped from auto-discovery) keep their old sensors as-is - this integration doesn't retroactively rewrite existing config entries. To bring an existing printer in line with the new layout, remove it under Settings → Devices & Services and re-run discovery, or manually remove the now-redundant `Model`/`Serial Number`/`... Max` sensors via **Configure → Remove a sensor**.
