@@ -6,6 +6,11 @@ DOMAIN = "snmp_ui"
 CONF_SENSORS = "sensors"
 CONF_SENSOR_ID = "id"
 CONF_UNIT = "unit_of_measurement"  # optional per-sensor unit, e.g. "%"
+CONF_VALUE_MAP = "value_map"  # optional {"raw value": "display text"} dict, e.g. status codes
+CONF_VALUE_TYPE = "value_type"  # optional native value type override, currently only "int"
+CONF_STATE_CLASS = "state_class"  # optional HA state_class, e.g. "total_increasing"
+
+UNIT_PAGES = "pages"
 
 # Keys used inside a config entry's `data` dict to store device-level
 # properties (as opposed to sensors) discovered automatically, so they can

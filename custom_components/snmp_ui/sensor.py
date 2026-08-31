@@ -64,6 +64,8 @@ from .const import (
     CONF_SENSORS,
     CONF_SERIAL_NUMBER,
     CONF_UNIT,
+    CONF_VALUE_MAP,
+    CONF_VALUE_TYPE,
     CONF_VERSION,
     DEFAULT_AUTH_PROTOCOL,
     DEFAULT_COMMUNITY,
@@ -202,7 +204,13 @@ async def async_setup_entry(
         request_args = await async_build_entry_request_args(
             hass, entry.data, baseoid, sensor_conf.get(CONF_COMMUNITY)
         )
-        data = SnmpData(request_args, baseoid, accept_errors=True, default_value=None)
+        data = SnmpData(
+            request_args,
+            baseoid,
+            accept_errors=True,
+            default_value=None,
+            value_type=sensor_conf.get(CONF_VALUE_TYPE),
+        )
 
         unique_id = f"{entry.entry_id}_{sensor_conf[CONF_SENSOR_ID]}"
         trigger_entity_config = {
@@ -211,6 +219,8 @@ async def async_setup_entry(
         }
         if unit := sensor_conf.get(CONF_UNIT):
             trigger_entity_config[CONF_UNIT_OF_MEASUREMENT] = unit
+        if state_class := sensor_conf.get(CONF_STATE_CLASS):
+            trigger_entity_config[CONF_STATE_CLASS] = state_class
         entities.append(
             SnmpSensor(
                 hass,
@@ -218,6 +228,7 @@ async def async_setup_entry(
                 trigger_entity_config,
                 value_template=None,
                 device_info=device_info,
+                value_map=sensor_conf.get(CONF_VALUE_MAP),
             )
         )
 
@@ -236,12 +247,14 @@ class SnmpSensor(ManualTriggerSensorEntity):
         config: ConfigType,
         value_template: ValueTemplate | None,
         device_info: DeviceInfo | None = None,
+        value_map: dict[str, str] | None = None,
     ) -> None:
         """Initialize the sensor."""
         super().__init__(hass, config)
         self.data = data
         self._state = None
         self._value_template = value_template
+        self._value_map = value_map
         if device_info is not None:
             self._attr_device_info = device_info
 
@@ -262,6 +275,12 @@ class SnmpSensor(ManualTriggerSensorEntity):
             value = self._value_template.async_render_as_value_template(
                 self.entity_id, variables, STATE_UNKNOWN
             )
+        elif self._value_map is not None:
+            # Plain-text lookup for a raw SNMP status code, e.g. mapping a
+            # printer's hrPrinterStatus "4" to "Printing". Values that
+            # aren't in the map (unexpected/vendor-specific codes) are shown
+            # as-is rather than hidden.
+            value = self._value_map.get(str(value), value)
 
         self._set_native_value_with_possible_timestamp(value)
         self._process_manual_data(variables)
@@ -270,12 +289,19 @@ class SnmpSensor(ManualTriggerSensorEntity):
 class SnmpData:
     """Get the latest data and update the states."""
 
-    def __init__(self, request_args, baseoid, accept_errors, default_value) -> None:
-        """Initialize the data object."""
+    def __init__(self, request_args, baseoid, accept_errors, default_value, value_type=None) -> None:
+        """Initialize the data object.
+
+        `value_type` optionally forces the decoded value to a native Python
+        type instead of leaving it as a string - currently only "int" is
+        supported (used for numeric counters like a printer's page count).
+        If the conversion fails, the raw string is kept instead.
+        """
         self._request_args = request_args
         self._baseoid = baseoid
         self._accept_errors = accept_errors
         self._default_value = default_value
+        self._value_type = value_type
         self.value = None
 
     async def async_update(self):
@@ -329,4 +355,13 @@ class SnmpData:
                     "SNMP error in decoding opaque type: %s", decode_exception
                 )
                 return self._default_value
-        return str(value)
+        return self._finalize(str(value))
+
+    def _finalize(self, str_value):
+        """Apply the optional `value_type` conversion to a decoded string."""
+        if self._value_type == "int":
+            try:
+                return int(str_value)
+            except (TypeError, ValueError):
+                return str_value
+        return str_value

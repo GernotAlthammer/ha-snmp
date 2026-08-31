@@ -61,8 +61,11 @@ from .const import (
     CONF_SENSOR_ID,
     CONF_SENSORS,
     CONF_SERIAL_NUMBER,
+    CONF_STATE_CLASS,
     CONF_SUBNET,
     CONF_UNIT,
+    CONF_VALUE_MAP,
+    CONF_VALUE_TYPE,
     CONF_VERSION,
     DEFAULT_COMMUNITY,
     DEFAULT_PORT,
@@ -84,6 +87,7 @@ from .const import (
     SCAN_CONCURRENCY,
     SCAN_MAX_HOSTS,
     SCAN_TIMEOUT,
+    UNIT_PAGES,
     UNIT_PERCENT,
 )
 from .util import async_snmp_probe, async_snmp_walk_table
@@ -94,6 +98,29 @@ VERSION_OPTIONS = ["1", "2c", "3"]
 DISCOVERY_VERSION_OPTIONS = ["1", "2c"]  # SNMPv3 needs per-device credentials, not scannable
 AUTH_PROTOCOL_OPTIONS = list(MAP_AUTH_PROTOCOLS)
 PRIV_PROTOCOL_OPTIONS = list(MAP_PRIV_PROTOCOLS)
+
+# Standard Host Resources MIB (RFC 2790) enum for hrPrinterStatus - the same
+# meaning on every vendor's printer, since it's part of the SNMP standard
+# itself rather than anything device-specific.
+PRINTER_STATUS_TEXT: dict[str, str] = {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "Idle",
+    "4": "Printing",
+    "5": "Warming Up",
+}
+
+# Standard IF-MIB (RFC 2863) enum for ifOperStatus - likewise the same
+# meaning for any switch/router port regardless of vendor.
+IF_OPER_STATUS_TEXT: dict[str, str] = {
+    "1": "Up",
+    "2": "Down",
+    "3": "Testing",
+    "4": "Unknown",
+    "5": "Dormant",
+    "6": "Not Present",
+    "7": "Lower Layer Down",
+}
 
 
 def _device_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
@@ -229,7 +256,13 @@ async def _build_printer_sensors(
     sensors: list[dict[str, Any]] = []
 
     def add_sensor(
-        label: str, value: str | None, oid: str, unit: str | None = None
+        label: str,
+        value: str | None,
+        oid: str,
+        unit: str | None = None,
+        value_map: dict[str, str] | None = None,
+        value_type: str | None = None,
+        state_class: str | None = None,
     ) -> None:
         if value is None:
             return
@@ -241,10 +274,23 @@ async def _build_printer_sensors(
         }
         if unit:
             sensor[CONF_UNIT] = unit
+        if value_map:
+            sensor[CONF_VALUE_MAP] = value_map
+        if value_type:
+            sensor[CONF_VALUE_TYPE] = value_type
+        if state_class:
+            sensor[CONF_STATE_CLASS] = state_class
         sensors.append(sensor)
 
-    add_sensor("Status", status, OID_PRINTER_STATUS)
-    add_sensor("Total Pages", pages, OID_TOTAL_PAGES)
+    add_sensor("Status", status, OID_PRINTER_STATUS, value_map=PRINTER_STATUS_TEXT)
+    add_sensor(
+        "Total Pages",
+        pages,
+        OID_TOTAL_PAGES,
+        unit=UNIT_PAGES,
+        value_type="int",
+        state_class="total_increasing",
+    )
 
     marker_rows = await async_snmp_walk_table(
         hass, host, port, version, community, OID_MARKER_SUPPLIES_DESCRIPTION
@@ -289,17 +335,23 @@ async def _build_switch_sensors(
 
     sensors: list[dict[str, Any]] = []
 
-    def add_sensor(label: str, value: str | None, oid: str) -> None:
+    def add_sensor(
+        label: str,
+        value: str | None,
+        oid: str,
+        value_map: dict[str, str] | None = None,
+    ) -> None:
         if value is None:
             return
-        sensors.append(
-            {
-                CONF_SENSOR_ID: uuid4().hex[:8],
-                CONF_NAME: f"{display_name} {label}",
-                CONF_COMMUNITY: community,
-                CONF_BASEOID: oid,
-            }
-        )
+        sensor: dict[str, Any] = {
+            CONF_SENSOR_ID: uuid4().hex[:8],
+            CONF_NAME: f"{display_name} {label}",
+            CONF_COMMUNITY: community,
+            CONF_BASEOID: oid,
+        }
+        if value_map:
+            sensor[CONF_VALUE_MAP] = value_map
+        sensors.append(sensor)
 
     add_sensor("Description", sys_descr, OID_SYS_DESCR)
     add_sensor("Port Count", num_ports, OID_DOT1D_BASE_NUM_PORTS)
@@ -314,7 +366,12 @@ async def _build_switch_sensors(
         clean_descr = (descr or "").strip(" \x00") or f"Port {suffix}"
         status_oid = f"{OID_IF_OPER_STATUS}.{suffix}"
         status = await probe(status_oid)
-        add_sensor(f"Port {clean_descr} Status", status, status_oid)
+        add_sensor(
+            f"Port {clean_descr} Status",
+            status,
+            status_oid,
+            value_map=IF_OPER_STATUS_TEXT,
+        )
 
     await asyncio.gather(
         *(build_port(suffix, descr) for suffix, descr in port_rows)
