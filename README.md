@@ -39,7 +39,8 @@ Network switches generally don't announce themselves via mDNS, so this discovery
 3. Home Assistant probes every address in that subnet for SNMP's printer-status OID. Devices that answer are listed with their model.
 4. Pick which of the found printers to add (all are pre-selected). For each one, a device is created and populated automatically - no OIDs to type in:
    * **Model** and **Serial Number** are stored as device properties and shown under the device's "Device info" section, not as separate sensors.
-   * **Status** and **Total Pages** sensors (whichever the printer supports).
+   * **Status** – shown as plain text (`Idle`, `Printing`, `Warming Up`, ...) rather than the raw numeric code, decoded using the standard Host Resources MIB (`hrPrinterStatus`) meanings, which are the same across every vendor.
+   * **Total Pages** – a proper integer sensor (unit `pages`, state class `total_increasing`) rather than a raw string, so it plays nicely with Home Assistant's statistics/long-term graphs.
    * One **Level** sensor (in **%**) per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has).
    * **Max-capacity** sensors are left out by default to keep the entity list lean - add one manually afterwards (see below) if you need it for a specific marker, e.g. `1.3.6.1.2.1.43.11.1.1.8.1.<marker index>`.
 
@@ -50,7 +51,7 @@ Network switches generally don't announce themselves via mDNS, so this discovery
 3. Home Assistant probes every address in that subnet for support of the standard Bridge-MIB (`dot1dBaseNumPorts`) - this OID only exists on devices that are actually managed switches/bridges, so it's a reliable "is this a switch" check regardless of vendor.
 4. Pick which of the found switches to add (all are pre-selected). For each one, a device is created **and its sensors are generated automatically**:
    * Description (`sysDescr`) and Port Count (`dot1dBaseNumPorts`), if supported
-   * One **Status** sensor per physical port (raw `ifOperStatus`: `1` = up, `2` = down, `3` = testing), discovered by walking the switch's interface table (`ifDescr`) - works for switches with any number of ports
+   * One **Status** sensor per physical port, shown as plain text (`Up`, `Down`, `Testing`, ...) rather than the raw numeric code, decoded using the standard IF-MIB (`ifOperStatus`) meanings, which are the same across every vendor - discovered by walking the switch's interface table (`ifDescr`), so it works for switches with any number of ports
 
 ## ⚙️ Adding sensors manually
 
