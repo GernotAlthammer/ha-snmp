@@ -40,6 +40,11 @@ OID_MARKER_SUPPLIES_LEVEL = "1.3.6.1.2.1.43.11.1.1.9.1"  # prtMarkerSuppliesLeve
 OID_MARKER_SUPPLIES_MAX = "1.3.6.1.2.1.43.11.1.1.8.1"  # prtMarkerSuppliesMaxCapacity
 OID_DETECTED_ERROR_STATE = "1.3.6.1.2.1.25.3.5.1.2.1"  # hrPrinterDetectedErrorState (bitmask)
 OID_CONSOLE_DISPLAY_TEXT = "1.3.6.1.2.1.43.16.5.1.2.1.1"  # prtConsoleDisplayBufferText
+OID_COVER_DESCRIPTION = "1.3.6.1.2.1.43.6.1.1.3"  # prtCoverDescription (walk)
+OID_COVER_STATUS = "1.3.6.1.2.1.43.6.1.1.4"  # prtCoverStatus
+OID_INPUT_DESCRIPTION = "1.3.6.1.2.1.43.8.2.1.13.1"  # prtInputDescription (walk) - "Tray 1", "Tray 2", ...
+OID_INPUT_CURRENT_LEVEL = "1.3.6.1.2.1.43.8.2.1.10.1"  # prtInputCurrentLevel
+OID_INPUT_MAX_CAPACITY = "1.3.6.1.2.1.43.8.2.1.9.1"  # prtInputMaxCapacity (not auto-added by default)
 
 # Generic MIB-II + Bridge-MIB + IF-MIB OIDs used to auto-detect network
 # switches and auto-create their sensors. `dot1dBaseNumPorts` only exists on

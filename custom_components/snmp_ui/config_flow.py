@@ -73,11 +73,15 @@ from .const import (
     MAP_AUTH_PROTOCOLS,
     MAP_PRIV_PROTOCOLS,
     OID_CONSOLE_DISPLAY_TEXT,
+    OID_COVER_DESCRIPTION,
+    OID_COVER_STATUS,
     OID_DETECTED_ERROR_STATE,
     OID_DEVICE_MODEL,
     OID_DOT1D_BASE_NUM_PORTS,
     OID_IF_DESCR,
     OID_IF_OPER_STATUS,
+    OID_INPUT_CURRENT_LEVEL,
+    OID_INPUT_DESCRIPTION,
     OID_MARKER_SUPPLIES_DESCRIPTION,
     OID_MARKER_SUPPLIES_LEVEL,
     OID_PRINTER_NAME,
@@ -112,15 +116,28 @@ PRINTER_STATUS_TEXT: dict[str, str] = {
     "5": "Warming Up",
 }
 
-# prtMarkerSuppliesLevel (RFC 3805) reserves negative values as sentinels
-# instead of a percentage - e.g. some printers report -1/-2/-3 for a
-# cartridge whose exact fill level they can't measure. Percentages (0-100)
-# pass through this map untouched and keep the numeric % display; only
-# these special values get replaced with text.
-MARKER_LEVEL_SENTINEL_TEXT: dict[str, str] = {
+# prtMarkerSuppliesLevel/prtInputCurrentLevel (RFC 3805) reserve negative
+# values as sentinels instead of a count/percentage - e.g. some printers
+# report -1/-2/-3 for a cartridge or tray whose exact fill level they can't
+# measure. Positive numbers pass through this map untouched and keep their
+# numeric display; only these special values get replaced with text. Shared
+# by toner/ink marker levels and paper-tray levels alike, since RFC 3805
+# defines the same convention for both.
+SUPPLY_LEVEL_SENTINEL_TEXT: dict[str, str] = {
     "-1": "Not Applicable",
     "-2": "Some Remaining (Unknown Level)",
     "-3": "Unknown",
+}
+
+# Standard Printer-MIB/IANA-PRINTER-MIB enum for prtCoverStatus - the same
+# meaning on every vendor's printer.
+COVER_STATUS_TEXT: dict[str, str] = {
+    "1": "Other",
+    "2": "Unknown",
+    "3": "Open",
+    "4": "Closed",
+    "5": "Interlock Open",
+    "6": "Interlock Closed",
 }
 
 # Standard IF-MIB (RFC 2863) enum for ifOperStatus - likewise the same
@@ -236,16 +253,16 @@ async def _build_printer_sensors(
 
     Returns a display name for the device, a ready-to-store list of sensor
     dicts (same shape as sensors added manually via the options flow) - just
-    Status, Error State, Display, Total Pages and one "Level" sensor (in %)
-    per toner/ink marker found via an SNMP table walk - plus a `device_data`
-    dict with the printer's Model and Serial Number, meant to be stored on
-    the config entry itself and shown under "Device info" rather than as
-    sensors.
+    Status, Error State, Display, Total Pages, one "Level" sensor (in %) per
+    toner/ink marker, one "Status" sensor per cover/door and one "Level"
+    sensor per paper tray, each discovered via an SNMP table walk - plus a
+    `device_data` dict with the printer's Model and Serial Number, meant to
+    be stored on the config entry itself and shown under "Device info"
+    rather than as sensors.
 
-    Max-capacity sensors are intentionally left out by default (the level is
-    already a percentage in practice); add one manually via the options flow
-    if a specific printer needs it. Any field the printer doesn't support is
-    silently skipped.
+    Max-capacity sensors (for markers or trays) are intentionally left out
+    by default; add one manually via the options flow if a specific printer
+    needs it. Any field the printer doesn't support is silently skipped.
     """
 
     async def probe(oid: str) -> str | None:
@@ -332,11 +349,50 @@ async def _build_printer_sensors(
             level,
             level_oid,
             unit=UNIT_PERCENT,
-            value_map=MARKER_LEVEL_SENTINEL_TEXT,
+            value_map=SUPPLY_LEVEL_SENTINEL_TEXT,
+        )
+
+    # prtCoverTable - one row per physical cover/door the printer reports
+    # (e.g. "Top Cover", "Front Door"), each with its own open/closed state.
+    cover_rows = await async_snmp_walk_table(
+        hass, host, port, version, community, OID_COVER_DESCRIPTION
+    )
+
+    async def build_cover(suffix: str, description: str) -> None:
+        clean_description = (description or "").strip(" \x00") or f"Cover {suffix}"
+        status_oid = f"{OID_COVER_STATUS}.{suffix}"
+        cover_status = await probe(status_oid)
+        add_sensor(
+            f"{clean_description} Status",
+            cover_status,
+            status_oid,
+            value_map=COVER_STATUS_TEXT,
+        )
+
+    # prtInputTable - one row per paper source the printer reports (e.g.
+    # "Tray 1", "Tray 2", "Manual Feed"), however many a given model has.
+    # Only the current level is exposed by default (Max Capacity can be
+    # added manually, same as for toner/ink markers) to keep the entity
+    # list lean.
+    tray_rows = await async_snmp_walk_table(
+        hass, host, port, version, community, OID_INPUT_DESCRIPTION
+    )
+
+    async def build_tray(suffix: str, description: str) -> None:
+        clean_description = (description or "").strip(" \x00") or f"Tray {suffix}"
+        level_oid = f"{OID_INPUT_CURRENT_LEVEL}.{suffix}"
+        level = await probe(level_oid)
+        add_sensor(
+            f"{clean_description} Level",
+            level,
+            level_oid,
+            value_map=SUPPLY_LEVEL_SENTINEL_TEXT,
         )
 
     await asyncio.gather(
-        *(build_marker(suffix, description) for suffix, description in marker_rows)
+        *(build_marker(suffix, description) for suffix, description in marker_rows),
+        *(build_cover(suffix, description) for suffix, description in cover_rows),
+        *(build_tray(suffix, description) for suffix, description in tray_rows),
     )
 
     return display_name, sensors, device_data
