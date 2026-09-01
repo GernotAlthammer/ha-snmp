@@ -40,9 +40,13 @@ Network switches generally don't announce themselves via mDNS, so this discovery
 4. Pick which of the found printers to add (all are pre-selected). For each one, a device is created and populated automatically - no OIDs to type in:
    * **Model** and **Serial Number** are stored as device properties and shown under the device's "Device info" section, not as separate sensors.
    * **Status** – shown as plain text (`Idle`, `Printing`, `Warming Up`, ...) rather than the raw numeric code, decoded using the standard Host Resources MIB (`hrPrinterStatus`) meanings, which are the same across every vendor.
+   * **Error State** – a bitmask OID (`hrPrinterDetectedErrorState`) decoded into a plain-text list of active conditions, e.g. `Low Toner, Door Open`, or `OK` when nothing is set.
+   * **Display** – the printer's own front-panel display text (`prtConsoleDisplayBufferText`), shown verbatim exactly as the device reports it (e.g. `Ready`, `Paper Jam`) - not a code, no mapping needed.
    * **Total Pages** – a proper integer sensor (unit `pages`, state class `total_increasing`) rather than a raw string, so it plays nicely with Home Assistant's statistics/long-term graphs.
-   * One **Level** sensor (in **%**) per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has).
+   * One **Level** sensor (in **%**) per toner/ink marker, discovered by walking the printer's marker-supplies table (works for single-color and multi-color/CMYK printers alike, however many markers a given model has). A few printers report special negative values here instead of a percentage (`-1`/`-2`/`-3` per RFC 3805) when they can't measure the exact fill level - those are shown as text (`Not Applicable`, `Some Remaining (Unknown Level)`, `Unknown`) instead of a nonsensical negative percentage.
    * **Max-capacity** sensors are left out by default to keep the entity list lean - add one manually afterwards (see below) if you need it for a specific marker, e.g. `1.3.6.1.2.1.43.11.1.1.8.1.<marker index>`.
+
+There's no separate standardized "Toner Status" (e.g. Low/Empty/OK per color) OID in the Printer-MIB beyond the Level percentage and the device-wide Error State bits above - a genuinely dynamic per-marker status would require walking the printer's alert table (`prtAlertTable`), whose rows come and go as conditions change, which doesn't fit this integration's fixed-sensor-per-device model. The Level sentinel values and the shared Error State sensor are the closest standardized equivalent.
 
 ### Automatic network switch discovery (subnet scan)
 
