@@ -38,6 +38,8 @@ OID_TOTAL_PAGES = "1.3.6.1.2.1.43.10.2.1.4.1.1"  # prtMarkerLifeCount
 OID_MARKER_SUPPLIES_DESCRIPTION = "1.3.6.1.2.1.43.11.1.1.6.1"  # prtMarkerSuppliesDescription (walk)
 OID_MARKER_SUPPLIES_LEVEL = "1.3.6.1.2.1.43.11.1.1.9.1"  # prtMarkerSuppliesLevel
 OID_MARKER_SUPPLIES_MAX = "1.3.6.1.2.1.43.11.1.1.8.1"  # prtMarkerSuppliesMaxCapacity
+OID_DETECTED_ERROR_STATE = "1.3.6.1.2.1.25.3.5.1.2.1"  # hrPrinterDetectedErrorState (bitmask)
+OID_CONSOLE_DISPLAY_TEXT = "1.3.6.1.2.1.43.16.5.1.2.1.1"  # prtConsoleDisplayBufferText
 
 # Generic MIB-II + Bridge-MIB + IF-MIB OIDs used to auto-detect network
 # switches and auto-create their sensors. `dot1dBaseNumPorts` only exists on

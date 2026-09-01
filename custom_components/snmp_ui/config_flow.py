@@ -72,6 +72,8 @@ from .const import (
     DOMAIN,
     MAP_AUTH_PROTOCOLS,
     MAP_PRIV_PROTOCOLS,
+    OID_CONSOLE_DISPLAY_TEXT,
+    OID_DETECTED_ERROR_STATE,
     OID_DEVICE_MODEL,
     OID_DOT1D_BASE_NUM_PORTS,
     OID_IF_DESCR,
@@ -108,6 +110,17 @@ PRINTER_STATUS_TEXT: dict[str, str] = {
     "3": "Idle",
     "4": "Printing",
     "5": "Warming Up",
+}
+
+# prtMarkerSuppliesLevel (RFC 3805) reserves negative values as sentinels
+# instead of a percentage - e.g. some printers report -1/-2/-3 for a
+# cartridge whose exact fill level they can't measure. Percentages (0-100)
+# pass through this map untouched and keep the numeric % display; only
+# these special values get replaced with text.
+MARKER_LEVEL_SENTINEL_TEXT: dict[str, str] = {
+    "-1": "Not Applicable",
+    "-2": "Some Remaining (Unknown Level)",
+    "-3": "Unknown",
 }
 
 # Standard IF-MIB (RFC 2863) enum for ifOperStatus - likewise the same
@@ -223,10 +236,11 @@ async def _build_printer_sensors(
 
     Returns a display name for the device, a ready-to-store list of sensor
     dicts (same shape as sensors added manually via the options flow) - just
-    Status, Total Pages and one "Level" sensor (in %) per toner/ink marker
-    found via an SNMP table walk - plus a `device_data` dict with the
-    printer's Model and Serial Number, meant to be stored on the config
-    entry itself and shown under "Device info" rather than as sensors.
+    Status, Error State, Display, Total Pages and one "Level" sensor (in %)
+    per toner/ink marker found via an SNMP table walk - plus a `device_data`
+    dict with the printer's Model and Serial Number, meant to be stored on
+    the config entry itself and shown under "Device info" rather than as
+    sensors.
 
     Max-capacity sensors are intentionally left out by default (the level is
     already a percentage in practice); add one manually via the options flow
@@ -237,12 +251,16 @@ async def _build_printer_sensors(
     async def probe(oid: str) -> str | None:
         return await async_snmp_probe(hass, host, port, version, community, oid)
 
-    model, serial, printer_name, status, pages = await asyncio.gather(
-        probe(OID_DEVICE_MODEL),
-        probe(OID_SERIAL_NUMBER),
-        probe(OID_PRINTER_NAME),
-        probe(OID_PRINTER_STATUS),
-        probe(OID_TOTAL_PAGES),
+    model, serial, printer_name, status, pages, error_state, display_text = (
+        await asyncio.gather(
+            probe(OID_DEVICE_MODEL),
+            probe(OID_SERIAL_NUMBER),
+            probe(OID_PRINTER_NAME),
+            probe(OID_PRINTER_STATUS),
+            probe(OID_TOTAL_PAGES),
+            probe(OID_DETECTED_ERROR_STATE),
+            probe(OID_CONSOLE_DISPLAY_TEXT),
+        )
     )
 
     display_name = (printer_name or model or host or "").strip() or host
@@ -291,6 +309,15 @@ async def _build_printer_sensors(
         value_type="int",
         state_class="total_increasing",
     )
+    # hrPrinterDetectedErrorState is a bitmask - decoded into a plain-text
+    # list of active conditions (e.g. "Low Toner, Door Open") or "OK".
+    add_sensor(
+        "Error State", error_state, OID_DETECTED_ERROR_STATE, value_type="error_bits"
+    )
+    # prtConsoleDisplayBufferText is already free text as shown on the
+    # printer's own front-panel display (e.g. "Ready", "Paper Jam") - no
+    # mapping needed, it comes straight from the device.
+    add_sensor("Display", display_text, OID_CONSOLE_DISPLAY_TEXT)
 
     marker_rows = await async_snmp_walk_table(
         hass, host, port, version, community, OID_MARKER_SUPPLIES_DESCRIPTION
@@ -300,7 +327,13 @@ async def _build_printer_sensors(
         clean_description = (description or "").strip(" \x00") or f"Marker {suffix}"
         level_oid = f"{OID_MARKER_SUPPLIES_LEVEL}.{suffix}"
         level = await probe(level_oid)
-        add_sensor(f"{clean_description} Level", level, level_oid, unit=UNIT_PERCENT)
+        add_sensor(
+            f"{clean_description} Level",
+            level,
+            level_oid,
+            unit=UNIT_PERCENT,
+            value_map=MARKER_LEVEL_SENTINEL_TEXT,
+        )
 
     await asyncio.gather(
         *(build_marker(suffix, description) for suffix, description in marker_rows)

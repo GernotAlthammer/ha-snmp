@@ -355,6 +355,10 @@ class SnmpData:
                     "SNMP error in decoding opaque type: %s", decode_exception
                 )
                 return self._default_value
+
+        if self._value_type == "error_bits":
+            return _decode_printer_error_bits(value)
+
         return self._finalize(str(value))
 
     def _finalize(self, str_value):
@@ -365,3 +369,37 @@ class SnmpData:
             except (TypeError, ValueError):
                 return str_value
         return str_value
+
+
+# hrPrinterDetectedErrorState (RFC 1759 / RFC 3805) is a bitmask OCTET STRING:
+# bit 0 (most significant bit of the first octet) is lowPaper, counting down
+# to bit 7 = serviceRequested. Only the widely-implemented original 8 bits
+# are decoded here - some printers set additional bits in a second octet
+# (RFC 3805 extensions) that aren't covered by this list.
+_PRINTER_ERROR_BIT_LABELS = (
+    "Low Paper",
+    "No Paper",
+    "Low Toner",
+    "No Toner",
+    "Door Open",
+    "Jammed",
+    "Offline",
+    "Service Requested",
+)
+
+
+def _decode_printer_error_bits(value) -> str:
+    """Decode hrPrinterDetectedErrorState into a comma-separated text list."""
+    try:
+        raw = bytes(value)
+    except (TypeError, ValueError):
+        return str(value)
+    if not raw:
+        return "OK"
+    first_byte = raw[0]
+    active = [
+        label
+        for i, label in enumerate(_PRINTER_ERROR_BIT_LABELS)
+        if first_byte & (0x80 >> i)
+    ]
+    return ", ".join(active) if active else "OK"
