@@ -40,7 +40,7 @@
       },
       "discover_printers_select": {
         "title": "Gefundene Drucker",
-        "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - Modell und Seriennummer werden als Geräte-Informationen angezeigt; Status, Fehlerstatus, Display, Seitenzähler sowie ein Füllstand-Sensor je Tonerpatrone (in %) werden automatisch angelegt. Max-Füllgrad-Sensoren werden standardmäßig weggelassen - bei Bedarf nachträglich manuell hinzufügen.",
+        "description": "{count} Drucker gefunden. Auswählen, welche hinzugefügt werden sollen - Modell und Seriennummer werden als Geräte-Informationen angezeigt; Status, Fehlerstatus, Display, Seitenzähler, ein Füllstand-Sensor je Tonerpatrone (in %), ein Status-Sensor je Abdeckung/Klappe sowie ein Füllstand-Sensor je Papierfach werden automatisch angelegt. Max-Füllgrad-Sensoren werden standardmäßig weggelassen - bei Bedarf nachträglich manuell hinzufügen.",
         "data": {
           "host": "Hinzuzufügende Drucker"
         }
@@ -64,7 +64,7 @@
       },
       "zeroconf_confirm": {
         "title": "SNMP-Drucker gefunden",
-        "description": "{model} unter {host} gefunden. Hinzufügen? Modell und Seriennummer werden als Geräte-Informationen angezeigt; Status, Fehlerstatus, Display, Seitenzähler sowie ein Füllstand-Sensor je Tonerpatrone (in %) werden automatisch angelegt."
+        "description": "{model} unter {host} gefunden. Hinzufügen? Modell und Seriennummer werden als Geräte-Informationen angezeigt; Status, Fehlerstatus, Display, Seitenzähler, ein Füllstand-Sensor je Tonerpatrone (in %), ein Status-Sensor je Abdeckung/Klappe sowie ein Füllstand-Sensor je Papierfach werden automatisch angelegt."
       }
     },
     "abort": {
