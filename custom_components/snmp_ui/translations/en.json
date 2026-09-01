@@ -40,7 +40,7 @@
       },
       "discover_printers_select": {
         "title": "Printers found",
-        "description": "{count} printer(s) found. Pick which ones to add - Model and Serial Number are shown as device info, Status/Total Pages plus one toner/ink Level sensor (in %) per marker are created automatically. Max-capacity sensors are left out by default; add one manually afterwards if needed.",
+        "description": "{count} printer(s) found. Pick which ones to add - Model and Serial Number are shown as device info; Status, Error State, Display, Total Pages and one toner/ink Level sensor (in %) per marker are created automatically. Max-capacity sensors are left out by default; add one manually afterwards if needed.",
         "data": {
           "host": "Printers to add"
         }
@@ -64,7 +64,7 @@
       },
       "zeroconf_confirm": {
         "title": "SNMP printer discovered",
-        "description": "Found {model} at {host}. Add it? Model and Serial Number are shown as device info, Status/Total Pages plus one toner/ink Level sensor (in %) per marker are created automatically."
+        "description": "Found {model} at {host}. Add it? Model and Serial Number are shown as device info; Status, Error State, Display, Total Pages and one toner/ink Level sensor (in %) per marker are created automatically."
       }
     },
     "abort": {
